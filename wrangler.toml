@@ -1,13 +1,12 @@
 name = "xano-mcp-server"
 main = "src/index.ts"
 compatibility_date = "2024-05-01"
+account_id = "91e4e6d01964d00df36b85bd7e1549eb"
 
 # For authentication token storage
-# You'll need to create this namespace with:
-# wrangler kv:namespace create AUTH_TOKENS
-kv_namespaces = [
-  { binding = "AUTH_TOKENS", id = "YOUR_KV_NAMESPACE_ID_HERE" }
-]
+[[kv_namespaces]]
+binding = "AUTH_TOKENS"
+id = "71efbd627a12406c8f3be9ce60d5872d"
 
 # For stateful session management
 [[durable_objects.bindings]]
