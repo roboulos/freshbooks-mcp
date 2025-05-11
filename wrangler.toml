@@ -1,22 +1,4 @@
 name = "xano-mcp-server"
-main = "src/index.ts"
+main = "src/index.js"
 compatibility_date = "2024-05-01"
 account_id = "7eb97d8aafdc135db8eb1c18613dc170"
-
-# For authentication token storage
-[[kv_namespaces]]
-binding = "AUTH_TOKENS"
-id = "41ec43e065a3477eb9d426e22bbdeb5e"
-
-# For stateful session management
-[[durable_objects.bindings]]
-name = "SESSIONS"
-class_name = "SessionObject"
-
-[[migrations]]
-tag = "v1"
-new_classes = ["SessionObject"]
-
-# Environment variables
-[vars]
-XANO_API_BASE = "https://your-xano-instance.com/api:your-api-id"
