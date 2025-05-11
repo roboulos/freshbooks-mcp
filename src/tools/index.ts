@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
 import { XanoClient } from '../xano';
 import { searchTool, searchToolSchema } from './searchTool';

@@ -3,8 +3,8 @@
 /**
  * Simple MCP client example for testing your Xano MCP server
  */
-const { McpClient } = require('@modelcontextprotocol/sdk/client/mcp.js');
-const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/transport/streamable-http.js');
+const { McpClient } = require('@modelcontextprotocol/sdk/client/mcp');
+const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/transport/streamable-http');
 
 // Configuration
 const SERVER_URL = process.env.MCP_SERVER_URL || 'http://localhost:8787/mcp';

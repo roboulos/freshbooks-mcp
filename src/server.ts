@@ -1,6 +1,6 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SseServerTransport } from '@modelcontextprotocol/sdk/transport/sse.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/transport/streamable-http.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { SseServerTransport } from '@modelcontextprotocol/sdk/transport/sse';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/transport/streamable-http';
 import { Env } from './types/env';
 import { XanoClient } from './xano';
 import { registerTools, registerDynamicTools } from './tools';
