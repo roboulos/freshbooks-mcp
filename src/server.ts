@@ -1,6 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { SseServerTransport } from '@modelcontextprotocol/sdk/transport/sse';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/transport/streamable-http';
+import { McpServer, SseServerTransport, StreamableHTTPServerTransport } from './mcp-sdk';
 import { Env } from './types/env';
 import { XanoClient } from './xano';
 import { registerTools, registerDynamicTools } from './tools';
