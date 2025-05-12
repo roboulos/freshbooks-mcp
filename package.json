@@ -1,14 +1,18 @@
 {
-  "name": "cloudflare-mcp-server",
+  "name": "xano-mcp-server",
   "version": "1.0.0",
-  "description": "Simple MCP server for Xano integration using Cloudflare Workers",
-  "main": "src/index.js",
+  "private": true,
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "agents": "^0.0.65",
+    "zod": "^3.24.2"
+  },
   "devDependencies": {
-    "wrangler": "^3.19.0"
+    "wrangler": "^3.22.0",
+    "typescript": "^5.3.3"
   }
 }
