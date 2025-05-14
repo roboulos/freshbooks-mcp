@@ -54,7 +54,37 @@ This is the **persistent authentication with OAuthProvider** implementation, whi
 - A Xano instance with authentication API endpoint
 - npm and wrangler CLI installed
 
-## Setup Instructions
+## Project Status and Implementation Progress
+
+### Current Status: Work In Progress
+
+We've made significant progress implementing the OAuth authentication flow for Xano MCP. The current implementation:
+
+1. Successfully handles the initial OAuth authorization with Xano login
+2. Presents a clean login UI for email/password or token authentication
+3. Successfully connects to and authenticates with the Xano API
+4. Implements various Xano MCP tools that use authentication
+
+However, we're still addressing a challenge with the token exchange phase of the OAuth flow, specifically a "Client ID mismatch" error. Our current focus is on fixing this issue while maintaining the clean OAuth architecture.
+
+### Key Insights and Lessons Learned
+
+1. **CloudFlare OAuth Provider Architecture**:
+   - CloudFlare's OAuthProvider requires proper client registration and validation
+   - The token exchange process has strict client ID validation requirements
+   - The GitHub example works because it uses a registered GitHub OAuth app with consistent client IDs
+
+2. **Authentication Flow Implementation**:
+   - We've implemented the primary authorization endpoint successfully
+   - The token exchange endpoint requires matching client IDs between authorization and token requests
+   - Custom client validation via the `lookupClient` method is essential for correct token exchange
+
+3. **Next Implementation Steps**:
+   - Complete custom token exchange endpoint to bypass client validation issues
+   - Ensure consistent client IDs between authorization and token phases
+   - Implement proper token storage and retrieval system
+
+### Setup Instructions
 
 1. Clone this repository:
    ```bash
@@ -165,6 +195,32 @@ To add new tools with persistent authentication:
 3. Use the stored API key with `this.props.apiKey` for Xano API calls
 4. Add any additional authentication requirements as needed
 
+## Current Development Focus: Solving the Client ID Mismatch
+
+We're actively working on resolving the "Client ID mismatch" error that occurs during the token exchange phase of the OAuth flow. Our current approach involves:
+
+1. **Consistent Client ID Handling**:
+   - Ensuring the same client ID is used in both authorization and token exchange phases
+   - Setting a default client ID for the CloudFlare playground
+   - Implementing a robust `lookupClient` function to handle client validation properly
+
+2. **Custom Token Endpoint Implementation**:
+   - Bypassing internal CloudFlare OAuth validation that's causing client ID mismatches
+   - Directly handling token exchange with custom response generation
+   - Implementing proper error handling with detailed logging
+
+3. **Differences from GitHub Example**:
+   - The GitHub example works because it uses a registered GitHub OAuth app with proper client IDs
+   - Our implementation needs to handle client validation ourselves since we're authenticating directly with Xano
+   - We're exploring different approaches to resolving the client ID validation issues
+
+### Current Workarounds Being Tested
+
+- Custom token endpoint handler that bypasses internal validation
+- Auto-approval of all client IDs via the OAuthProvider configuration
+- Using consistent client IDs throughout the authorization flow
+- Enhanced logging to track the OAuth request through all phases
+
 ## Troubleshooting
 
 - **Authentication Failures**: Try clearing browser cookies and localStorage
@@ -172,6 +228,7 @@ To add new tools with persistent authentication:
 - **Login Problems**: Check that your Xano instance URL is correct
 - **Web UI Issues**: Try with a different browser or incognito mode
 - **Debugging**: Access `/debug-oauth` endpoint for diagnostic information
+- **Client ID Errors**: Check the "Client lookup for ID" logs in the worker logs
 
 ### Debugging Endpoints
 
@@ -186,6 +243,31 @@ To add new tools with persistent authentication:
 - [Cloudflare OAuth Provider](https://developers.cloudflare.com/workers/runtime-apis/oauth/)
 - [Xano Documentation](https://docs.xano.com/)
 - [Hono Documentation](https://hono.dev/)
+
+## Continuing Development
+
+To continue development where we left off:
+
+1. Focus on addressing the token exchange phase with the "Client ID mismatch" error
+2. Key files to examine:
+   - `src/xano-handler.ts`: Specifically the token endpoint implementation
+   - `src/index.ts`: Focus on OAuthProvider configuration and client validation
+
+### Next Steps To Explore
+
+1. Implement a fully custom token endpoint that bypasses the OAuthProvider's internal validation
+2. Consider direct manipulation of the KV storage to store authentication data
+3. Experiment with different client validation approaches:
+   - Using fixed client IDs throughout the flow
+   - Custom client registration during authorization
+   - More permissive client validation during token exchange
+
+### Logging and Debugging
+
+Use CloudFlare Worker logs to track the token exchange process:
+- Look for "Client lookup for ID" logs to see client validation
+- Examine "Token endpoint called directly" logs for token exchange details
+- Check for "OAuth error response: 400 invalid_grant - Client ID mismatch" errors
 
 ## License
 
