@@ -1,135 +1,362 @@
-import { Hono } from "hono";
-import { OAuthProvider } from "@cloudflare/oauth";
-import { MyMCP, AuthProps } from "./my-mcp";
-import { XanoAuthHandler } from "./auth-handler";
-import { extractToken } from "./utils";
+import { McpAgent } from "agents/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import { XanoHandler } from "./xano-handler";
+import { makeApiRequest, getMetaApiUrl, formatId } from "./utils";
 
+// Authentication properties interface - includes all the data we want to store about the authenticated user
+export type XanoAuthProps = {
+  apiKey: string;
+  userId: string;
+  authenticated: boolean;
+  userDetails?: {
+    name?: string;
+    email?: string;
+  };
+};
+
+// Define MCP agent for Xano
+export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
+  server = new McpServer({
+    name: "Xano MCP Server",
+    version: "1.0.0",
+  });
+
+  async init() {
+    // Debug tool to see what props are available
+    this.server.tool(
+      "debug_auth",
+      {},
+      async () => {
+        return {
+          content: [{
+            type: "text",
+            text: "Auth debug info: " + JSON.stringify({
+              apiKey: !!this.props?.apiKey,
+              userId: this.props?.userId,
+              authenticated: this.props?.authenticated,
+              userDetails: this.props?.userDetails
+            }, null, 2)
+          }]
+        };
+      }
+    );
+
+    // User info tool
+    this.server.tool(
+      "whoami",
+      {},
+      async () => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Not authenticated" }]
+          };
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              userId: this.props.userId,
+              name: this.props.userDetails?.name,
+              authenticated: true
+            }, null, 2)
+          }]
+        };
+      }
+    );
+
+    // Register hello tool
+    this.server.tool(
+      "hello",
+      { name: z.string() },
+      async ({ name }) => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: `Hello, ${name}! You are authenticated as ${this.props.userId}.` }]
+        };
+      }
+    );
+
+    // List Xano instances
+    this.server.tool(
+      "xano_list_instances",
+      {},
+      async () => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        // Use API key from props
+        const token = this.props.apiKey;
+
+        if (!token) {
+          return {
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
+          };
+        }
+
+        try {
+          const url = "https://app.xano.com/api:meta/instance";
+          const result = await makeApiRequest(url, token);
+
+          if (result.error) {
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }]
+            };
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({ instances: result })
+            }]
+          };
+        } catch (error) {
+          console.error(`Error listing instances: ${error.message}`);
+          return {
+            content: [{
+              type: "text",
+              text: `Error listing instances: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Get instance details
+    this.server.tool(
+      "xano_get_instance_details",
+      {
+        instance_name: z.string().describe("The name of the Xano instance")
+      },
+      async ({ instance_name }) => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        try {
+          // Construct instance details
+          const instanceDomain = `${instance_name}.n7c.xano.io`;
+          const details = {
+            name: instance_name,
+            display: instance_name.split("-")[0].toUpperCase(),
+            xano_domain: instanceDomain,
+            rate_limit: false,
+            meta_api: `https://${instanceDomain}/api:meta`,
+            meta_swagger: `https://${instanceDomain}/apispec:meta?type=json`,
+          };
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify(details)
+            }]
+          };
+        } catch (error) {
+          console.error(`Error getting instance details: ${error.message}`);
+          return {
+            content: [{
+              type: "text",
+              text: `Error getting instance details: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // List databases
+    this.server.tool(
+      "xano_list_databases",
+      {
+        instance_name: z.string().describe("The name of the Xano instance")
+      },
+      async ({ instance_name }) => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        // Use API key from props
+        const token = this.props.apiKey;
+
+        if (!token) {
+          return {
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
+          };
+        }
+
+        try {
+          const metaApi = getMetaApiUrl(instance_name);
+          const url = `${metaApi}/workspace`;
+          const result = await makeApiRequest(url, token);
+
+          if (result.error) {
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }]
+            };
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({ databases: result })
+            }]
+          };
+        } catch (error) {
+          console.error(`Error listing databases: ${error.message}`);
+          return {
+            content: [{
+              type: "text",
+              text: `Error listing databases: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Get workspace details
+    this.server.tool(
+      "xano_get_workspace_details",
+      {
+        instance_name: z.string().describe("The name of the Xano instance"),
+        workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace")
+      },
+      async ({ instance_name, workspace_id }) => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        // Use API key from props
+        const token = this.props.apiKey;
+
+        if (!token) {
+          return {
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
+          };
+        }
+
+        try {
+          const metaApi = getMetaApiUrl(instance_name);
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}`;
+          const result = await makeApiRequest(url, token);
+
+          if (result.error) {
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }]
+            };
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify(result)
+            }]
+          };
+        } catch (error) {
+          console.error(`Error getting workspace details: ${error.message}`);
+          return {
+            content: [{
+              type: "text",
+              text: `Error getting workspace details: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // List tables
+    this.server.tool(
+      "xano_list_tables",
+      {
+        instance_name: z.string().describe("The name of the Xano instance"),
+        database_id: z.union([z.string(), z.number()]).describe("The ID of the Xano workspace/database")
+      },
+      async ({ instance_name, database_id }) => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        // Use API key from props
+        const token = this.props.apiKey;
+
+        if (!token) {
+          return {
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
+          };
+        }
+
+        try {
+          const metaApi = getMetaApiUrl(instance_name);
+          const url = `${metaApi}/workspace/${formatId(database_id)}/table`;
+          const result = await makeApiRequest(url, token);
+
+          if (result.error) {
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }]
+            };
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({ tables: result })
+            }]
+          };
+        } catch (error) {
+          console.error(`Error listing tables: ${error.message}`);
+          return {
+            content: [{
+              type: "text",
+              text: `Error listing tables: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+  }
+}
+
+// Create a new OAuthProvider instance with the correct pattern
+export default new OAuthProvider({
+  kvNamespace: "OAUTH_KV",
+  apiRoute: "/sse",
+  apiHandler: MyMCP.mount("/sse"),
+  defaultHandler: XanoHandler,
+  authorizeEndpoint: "/authorize",
+  tokenEndpoint: "/token",
+  clientRegistrationEndpoint: "/register",
+  // Set these values to improve compatibility with OAuth clients
+  forceHTTPS: true,
+  refreshEndpoint: "/refresh",
+  redirectURL: "/oauth-callback" // This should match what the MCP client expects
+});
+
+// Environment type
 export interface Env {
   MCP_OBJECT: DurableObjectNamespace;
   OAUTH_KV: KVNamespace;
   XANO_BASE_URL: string;
-  OAUTH_PROVIDER?: any;
 }
-
-// Main Hono app
-const app = new Hono<{ Bindings: Env }>();
-
-// Create and configure OAuth provider
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    
-    // Set up OAuth provider
-    const oauthProvider = new OAuthProvider<AuthProps>({
-      kvNamespace: env.OAUTH_KV,
-      oauth: {
-        clientId: "xano-mcp-server",
-        authorizationUrl: new URL("/authorize", new URL(request.url).origin).toString(),
-        tokenUrl: new URL("/token", new URL(request.url).origin).toString(),
-      },
-    });
-    env.OAUTH_PROVIDER = oauthProvider;
-
-    // Route auth-related endpoints
-    app.route("/", XanoAuthHandler);
-
-    // For backward compatibility, check if there's a token in the request
-    // If there is and we're not authenticated yet, go through the auth flow
-    const token = extractToken(request);
-    let authProps = await oauthProvider.getAuthProps(request);
-    
-    if (token && !authProps) {
-      // If we have a token but no auth props, try to authenticate with Xano
-      try {
-        const response = await fetch(`${env.XANO_BASE_URL}/api:e6emygx3/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          // Parse the Xano auth response to get the user data
-          const userData = await response.json();
-          
-          // Complete authorization with the OAuth provider
-          if (userData && userData.api_key) {
-            // Redirect to authorization endpoint with the token
-            const authUrl = new URL("/authorize", new URL(request.url).origin);
-            authUrl.searchParams.set("auth_token", token);
-            
-            // Add OAuth required params
-            authUrl.searchParams.set("client_id", "xano-mcp-server");
-            authUrl.searchParams.set("redirect_uri", url.toString());
-            authUrl.searchParams.set("response_type", "code");
-            authUrl.searchParams.set("state", crypto.randomUUID());
-            
-            return Response.redirect(authUrl.toString(), 302);
-          }
-        }
-      } catch (error) {
-        console.error('Error validating token:', error);
-      }
-    }
-
-    // Handle MCP agent requests
-    if (url.pathname === "/sse" || url.pathname === "/sse/message") {
-      // Get most recent auth props
-      authProps = await oauthProvider.getAuthProps(request);
-      
-      // Create auth context
-      let authContext = {};
-      
-      if (authProps) {
-        // Format auth props to be compatible with both formats
-        authContext = {
-          // Direct properties for new code
-          apiKey: authProps.apiKey,
-          authenticated: true,
-          userId: authProps.userId || 'xano_user',
-          
-          // Nested user object for backward compatibility
-          user: {
-            id: authProps.userId || 'xano_user',
-            authenticated: true,
-            apiKey: authProps.apiKey
-          }
-        };
-      }
-      
-      return MyMCP.serveSSE("/sse", authContext).fetch(request, env, ctx);
-    }
-    
-    if (url.pathname === "/mcp") {
-      // Get most recent auth props
-      authProps = await oauthProvider.getAuthProps(request);
-      
-      // Create auth context
-      let authContext = {};
-      
-      if (authProps) {
-        // Format auth props to be compatible with both formats
-        authContext = {
-          // Direct properties for new code
-          apiKey: authProps.apiKey,
-          authenticated: true,
-          userId: authProps.userId || 'xano_user',
-          
-          // Nested user object for backward compatibility
-          user: {
-            id: authProps.userId || 'xano_user',
-            authenticated: true,
-            apiKey: authProps.apiKey
-          }
-        };
-      }
-      
-      return MyMCP.serve("/mcp", authContext).fetch(request, env, ctx);
-    }
-    
-    // Handle other routes with the Hono app
-    return app.fetch(request, env, ctx);
-  },
-};
-
-// Export Durable Object class
-export { MyMCP };

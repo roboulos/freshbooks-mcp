@@ -11,8 +11,8 @@ class_name = "MyMCP"
 
 # For OAuth persistence
 [[kv_namespaces]]
-binding = "OAUTH_KV" 
-id = "YOUR_KV_NAMESPACE_ID"  # Replace with your actual KV namespace ID
+binding = "OAUTH_KV"
+id = "c43c2dc2174244c8bb1d4e5bb9cf6fa4"
 
 [[migrations]]
 tag = "v1"

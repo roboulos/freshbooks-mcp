@@ -2,60 +2,51 @@
 
 A Cloudflare Workers-based MCP (Model Context Protocol) server that authenticates with Xano and maintains persistent authentication state across Durable Object hibernation using OAuthProvider. This server enables AI assistants like Claude to securely interact with your Xano backend even after periods of inactivity.
 
-## ⚠️ EXPERIMENTAL SOLUTION - OAUTH PROVIDER WITH PERSISTENCE
-
-This implementation is experimental and uses Cloudflare's OAuthProvider for persistent authentication.
-
 ## Branch Information
 
 This repository is organized into three branches for different use cases:
 
-1. **`main`**: Minimal implementation with basic authentication
-2. **`xano-tools`**: Adds Xano API tools while keeping the simple authentication
-3. **`oauth-provider`** (current): Uses OAuthProvider for persistent authentication
+1. **`main`**: Minimal implementation with basic token validation
+2. **`xano-tools`**: Adds Xano API tools while maintaining simple token validation
+3. **`oauth-provider`** (current): Uses OAuthProvider for persistent authentication with email/password login
 
 ```bash
 # For minimal implementation (stable)
 git checkout main
 
-# For implementation with Xano tools
+# For implementation with Xano tools (recommended for most users)
 git checkout xano-tools
 
-# For implementation with persistent OAuth (current branch)
+# For implementation with persistent OAuth (advanced)
 git checkout oauth-provider
 ```
 
 ## Implementation Details
 
-This is the **persistent authentication with OAuthProvider** implementation:
+This is the **persistent authentication with OAuthProvider** implementation, which adds the following:
 
 ### What This Implementation Does
-- Uses Cloudflare's OAuthProvider for persistent authentication
-- Maintains authentication state across Durable Object hibernation
-- Stores authentication tokens in KV storage
-- Automatic token validation and restoration on reconnection
-- Provides a more robust authentication flow for production use
+- **Web-based Authentication Form**: Login with Xano email/password or API token
+- **OAuth Flow**: Implements a standard OAuth 2.0 flow for persistent authentication
+- **Persistent Tokens**: Maintains authentication state across Durable Object hibernation
+- **Token Refreshing**: Automatically handles token expiration and refreshing
+- **Connection Resilience**: Reconnects with preserved authentication state
 
 ### Advantages Over Other Branches
-- **Persistent Authentication**: Authentication state persists even after Durable Object hibernation
-- **Token Storage**: Tokens are securely stored in KV storage
-- **Resilient Connections**: Users don't need to re-authenticate after periods of inactivity
-- **Enhanced Security**: Better token management and security practices
-- **Automated Handling**: Less client-side authentication management required
-
-### When to Use This Implementation
-- For production applications requiring persistent authentication
-- For scenarios where users should remain authenticated across sessions
-- When authentication tokens need to be securely managed
-- When a more robust authentication flow is required
+- **Login UI**: Interactive login with direct email/password or token options
+- **Session Management**: Tokens persist even after Worker restarts or Durable Object hibernation
+- **User-Friendly**: Better authentication experience for non-technical users
+- **Enhanced Security**: Proper token management and storage practices
+- **Code Organization**: Uses Hono framework for routing and request handling
 
 ## Features
 
-- **Persistent Authentication**: Authentication state persists across Durable Object hibernation
-- **OAuthProvider Integration**: Leverages Cloudflare's OAuthProvider for state management
-- **KV Storage**: Uses Cloudflare KV for token storage
-- **Multiple Connection Methods**: Supports both SSE (browser) and streamable HTTP connections
-- **Type Safety**: Full TypeScript support for better developer experience
+- **Interactive Login Form**: Email/password or API token authentication options
+- **OAuth 2.0 Implementation**: Standard authorization_code flow with refresh tokens
+- **KV Token Storage**: Secure token storage with proper expiration handling
+- **Connection Resilience**: Handles disconnections and hibernation gracefully
+- **TypeScript Support**: Full type safety throughout the codebase
+- **Debug Endpoints**: Utilities for troubleshooting authentication issues
 
 ## Prerequisites
 
@@ -63,104 +54,130 @@ This is the **persistent authentication with OAuthProvider** implementation:
 - A Xano instance with authentication API endpoint
 - npm and wrangler CLI installed
 
-## Quick Start
+## Setup Instructions
 
 1. Clone this repository:
-   ```
+   ```bash
    git clone https://github.com/roboulos/cloudflare-mcp-server.git
    cd cloudflare-mcp-server
-   ```
-
-2. Switch to the oauth-provider branch:
-   ```
    git checkout oauth-provider
    ```
 
-3. Install dependencies:
-   ```
+2. Install dependencies:
+   ```bash
    npm install
    ```
 
-4. Create a KV namespace for token storage:
-   ```
-   npx wrangler kv:namespace create OAUTH_KV
+3. Create a KV namespace for token storage:
+   ```bash
+   npx wrangler kv namespace create OAUTH_KV
    ```
 
-5. Update your wrangler.toml with the KV namespace ID from the previous step:
+4. Update your wrangler.toml with the KV namespace ID from the previous step:
    ```toml
    [[kv_namespaces]]
-   binding = "OAUTH_KV" 
-   id = "YOUR_KV_NAMESPACE_ID"
+   binding = "OAUTH_KV"
+   id = "YOUR_KV_NAMESPACE_ID"  # Replace with your actual KV namespace ID
    ```
 
-6. Update your Xano URL in wrangler.toml:
+5. Update your Xano URL in wrangler.toml with your instance's URL:
    ```toml
    [vars]
    XANO_BASE_URL = "https://YOUR-INSTANCE.n7c.xano.io"
    ```
 
-7. Deploy to Cloudflare:
-   ```
+6. Deploy to Cloudflare:
+   ```bash
    npx wrangler deploy
    ```
 
-8. Connect via Cloudflare AI Playground (you'll only need to authenticate once):
+7. Connect using any MCP client (like Claude or Cursor):
    ```
-   https://your-worker.your-account.workers.dev/sse?auth_token=YOUR_XANO_TOKEN
+   https://your-worker.your-account.workers.dev/sse
    ```
+   You'll see a login form where you can authenticate with Xano credentials
 
-## How It Works
+## Authentication Flow
 
-### Authentication Flow
+### OAuth Flow
 
-1. Client connects with a Xano token via URL parameter (`?auth_token=...`) or Authorization header (`Bearer ...`)
-2. The server validates the token with Xano's API and generates an OAuth token
-3. The OAuth token is stored in KV storage and associated with the session
-4. On reconnection, the OAuth token is retrieved from KV storage automatically
-5. Even after Durable Object hibernation, the session remains authenticated
+1. A client requests the `/sse` endpoint
+2. The OAuthProvider redirects to the `/authorize` endpoint
+3. The user is presented with a login form to authenticate with Xano
+4. Upon successful authentication, an authorization code is generated
+5. The client exchanges the code for access and refresh tokens
+6. Tokens are stored in KV for future use
+7. The client can reconnect using the tokens, without requiring re-authentication
 
-### Key Files
+### Authentication Options
 
-- `src/index.ts`: Main entry point with OAuthProvider setup
-- `src/auth-handler.ts`: Authentication handler for token management
-- `src/my-mcp.ts`: MCP agent implementation with tools
-- `src/utils.ts`: Utility functions for API requests
-- `wrangler.toml`: Cloudflare Worker configuration with KV bindings
+1. **Email/Password Login**: Authenticate using your Xano account credentials
+2. **Direct Token Use**: Provide a Xano API token directly
+3. **Refresh Token**: Automatically refresh expired tokens
 
-## Technical Implementation
+## Key Files
 
-The implementation uses a modular approach with four main components:
+- `src/index.ts`: Main entry point with OAuthProvider and MCP agent setup
+- `src/xano-handler.ts`: Handler for OAuth flow and authentication logic
+- `src/utils.ts`: Utility functions for API requests and token management
+- `wrangler.toml`: Worker configuration with KV and environment settings
 
-1. **OAuthProvider**
+## Technical Architecture
+
+The implementation uses Cloudflare's OAuthProvider pattern for authentication persistence:
+
+1. **OAuthProvider** (index.ts)
+   - Central hub for OAuth flow and token management
+   - Configures routes for authorization, token exchange, and API access
    - Manages token persistence through KV storage
-   - Handles token generation, validation, and retrieval
 
-2. **Authentication Handler**
-   - Processes initial authentication with Xano
-   - Converts Xano tokens to OAuth tokens for persistence
+2. **XanoHandler** (xano-handler.ts)
+   - Implements the OAuth flow endpoints
+   - Handles initial authentication with Xano
+   - Manages token lifecycle (creation, storage, refresh)
+   - Provides login UI for user authentication
 
-3. **MCP Agent**
-   - Implements tools with authentication checks
-   - Uses stored authentication data for operations
+3. **MCP Agent** (index.ts)
+   - Implements Xano API tools with authentication checks
+   - Uses stored authentication data for API operations
+   - Enforces authentication requirements for protected operations
 
-4. **Request Handler**
-   - Routes requests to appropriate endpoints
-   - Manages authentication flow
+4. **Utilities** (utils.ts)
+   - Handles token extraction and validation
+   - Provides helper functions for API requests
+   - Manages token storage and retrieval from KV
 
-## Adding Your Own Tools
+## Authentication Endpoints
+
+- `/authorize`: Presents the login UI and handles initial authentication
+- `/token`: Handles the OAuth token exchange
+- `/refresh`: Refreshes expired access tokens
+- `/oauth-callback`: Handles the OAuth redirect callback
+- `/status`: Endpoint to check authentication status
+- `/debug-oauth`: Debugging endpoint for OAuth flow issues
+
+## Adding Custom Tools
 
 To add new tools with persistent authentication:
 
-1. Add new tool registrations in the `init()` method of `my-mcp.ts`
-2. Use `this.props?.authenticated` or `this.props?.user?.authenticated` to check authentication
-3. Use the stored API key for making calls to Xano
+1. Add tool registrations in the `init()` method of `src/index.ts`
+2. Check authentication with `this.props?.authenticated`
+3. Use the stored API key with `this.props.apiKey` for Xano API calls
+4. Add any additional authentication requirements as needed
 
 ## Troubleshooting
 
-- **First-time setup**: On first connection, you need to provide a token via URL or header
-- **KV namespace issues**: Ensure your KV namespace is correctly configured in wrangler.toml
-- **Deployment issues**: Check your wrangler.toml configuration
-- **Authentication errors**: Ensure your Xano token is valid
+- **Authentication Failures**: Try clearing browser cookies and localStorage
+- **KV Issues**: Verify KV namespace is correctly configured in wrangler.toml
+- **Login Problems**: Check that your Xano instance URL is correct
+- **Web UI Issues**: Try with a different browser or incognito mode
+- **Debugging**: Access `/debug-oauth` endpoint for diagnostic information
+
+### Debugging Endpoints
+
+- `/health`: Check if the server is running correctly
+- `/status`: View current authentication status (requires bearer token)
+- `/debug-oauth`: Debug endpoint with request and authentication information
 
 ## Resources
 
@@ -168,6 +185,7 @@ To add new tools with persistent authentication:
 - [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
 - [Cloudflare OAuth Provider](https://developers.cloudflare.com/workers/runtime-apis/oauth/)
 - [Xano Documentation](https://docs.xano.com/)
+- [Hono Documentation](https://hono.dev/)
 
 ## License
 
