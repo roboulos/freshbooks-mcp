@@ -10,6 +10,22 @@ This implementation has been verified to work correctly with:
 - Xano authentication
 - Claude AI assistant
 
+## Branch Structure
+
+This repository uses the following branch organization:
+
+- **`main`**: Contains the stable, verified working implementation
+- **`oauth-provider-experiment`**: Experimental implementation using Cloudflare's OAuthProvider for better state persistence
+
+To switch between versions:
+```bash
+# For the stable version
+git checkout main
+
+# For the experimental OAuth version
+git checkout oauth-provider-experiment
+```
+
 ## Features
 
 - **Simple MCP Server**: Minimal, clean implementation based on the official authless example
