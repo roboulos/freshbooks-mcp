@@ -1,17 +1,232 @@
-import { Hono } from 'hono';
-import { XanoAuthProps } from "./index";
+import type { AuthRequest, OAuthHelpers } from '@cloudflare/workers-oauth-provider'
+import { Hono } from 'hono'
+import { fetchXanoAuthToken, fetchXanoUserInfo, Props } from './utils'
+import { clientIdAlreadyApproved, parseRedirectApproval, renderApprovalDialog } from './workers-oauth-utils'
+import { Env } from './index'
 
-// Create a Hono app for better routing
-const app = new Hono();
+const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>()
 
-// Helper function to generate the login form HTML
-function loginForm(state: string, errorMessage?: string) {
-  return `<!DOCTYPE html>
+// Handler for /authorize GET - initial entry for OAuth flow
+app.get('/authorize', async (c) => {
+    // Parse the OAuth request from the client (exactly like GitHub example)
+    const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw)
+    
+    // Extract and validate client ID (exactly like GitHub example)
+    const { clientId } = oauthReqInfo
+    if (!clientId) {
+        return c.text('Invalid request', 400)
+    }
+
+    // Check if this client is already approved (exactly like GitHub example)
+    // Note: You would need to set a COOKIE_ENCRYPTION_KEY environment variable
+    if (c.env.COOKIE_ENCRYPTION_KEY && await clientIdAlreadyApproved(c.req.raw, oauthReqInfo.clientId, c.env.COOKIE_ENCRYPTION_KEY)) {
+        return redirectToXanoLogin(c.req.raw, oauthReqInfo, c.env.XANO_BASE_URL)
+    }
+
+    // Show approval dialog (exactly like GitHub example)
+    return renderApprovalDialog(c.req.raw, {
+        client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
+        server: {
+            name: "Xano MCP Server",
+            logo: "https://app.xano.com/favicon-32x32.png",
+            description: 'This MCP server allows you to interact with your Xano instance through Claude.', 
+        },
+        state: { oauthReqInfo }, // Pass OAuth request info through approval process
+    })
+})
+
+// Handler for /authorize POST - processes approval form submission
+app.post('/authorize', async (c) => {
+    // Parse the approval form (exactly like GitHub example)
+    try {
+        // Process the form and get state and cookie headers
+        const { state, headers } = await parseRedirectApproval(c.req.raw, c.env.COOKIE_ENCRYPTION_KEY || 'default-key')
+        
+        // Validate the state data
+        if (!state.oauthReqInfo) {
+            return c.text('Invalid request', 400)
+        }
+
+        // Redirect to Xano login with the OAuth request info
+        return redirectToXanoLogin(c.req.raw, state.oauthReqInfo, c.env.XANO_BASE_URL, headers)
+    } catch (error) {
+        console.error("Error processing approval form:", error);
+        return c.text('Error processing approval', 500);
+    }
+})
+
+// Function to redirect to Xano login page (equivalent to GitHub's redirectToGithub function)
+async function redirectToXanoLogin(request: Request, oauthReqInfo: AuthRequest, baseUrl: string, headers: Record<string, string> = {}) {
+    // Create the login page URL
+    const loginUrl = new URL('/login', request.url);
+    
+    // Pass the OAuth request info in state parameter
+    const state = btoa(JSON.stringify(oauthReqInfo));
+    loginUrl.searchParams.set('state', state);
+    
+    // Create the redirect response
+    return new Response(null, {
+        status: 302,
+        headers: {
+            ...headers,
+            location: loginUrl.href,
+        },
+    })
+}
+
+// Xano login page
+app.get('/login', async (c) => {
+    try {
+        // Get the state parameter from the URL
+        const state = c.req.query('state');
+        if (!state) {
+            return c.text('Missing state parameter', 400);
+        }
+        
+        // Render the login form HTML
+        return new Response(renderLoginForm(state), {
+            headers: {
+                'Content-Type': 'text/html; charset=utf-8',
+            },
+        });
+    } catch (error) {
+        console.error("Error in login page:", error);
+        return c.text('Error loading login page', 500);
+    }
+})
+
+// Process login form submission
+app.post('/login', async (c) => {
+    try {
+        // Parse the form data
+        const formData = await c.req.parseBody();
+        const email = formData.email as string;
+        const password = formData.password as string;
+        const state = formData.state as string;
+        
+        // Validate form data
+        if (!email || !password || !state) {
+            return c.text('Missing required form fields', 400);
+        }
+        
+        // Authenticate with Xano
+        const [token, errorResponse] = await fetchXanoAuthToken({
+            base_url: c.env.XANO_BASE_URL,
+            email,
+            password,
+        });
+        
+        // Handle authentication error
+        if (errorResponse) {
+            return new Response(renderLoginForm(state, 'Invalid email or password. Please try again.'), {
+                headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                },
+            });
+        }
+        
+        // Redirect to callback with the token and state
+        return Response.redirect(`${new URL('/callback', c.req.url).href}?token=${encodeURIComponent(token!)}&state=${encodeURIComponent(state)}`);
+    } catch (error) {
+        console.error("Error processing login form:", error);
+        return c.text('Error processing login form', 500);
+    }
+})
+
+// Direct token authentication handler
+app.get('/token-auth', async (c) => {
+    try {
+        // Get token and state from query params
+        const token = c.req.query('token');
+        const state = c.req.query('state');
+        
+        if (!token || !state) {
+            return c.text('Missing token or state parameter', 400);
+        }
+        
+        // Redirect to callback with the token and state
+        return Response.redirect(`${new URL('/callback', c.req.url).href}?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`);
+    } catch (error) {
+        console.error("Error in token auth:", error);
+        return c.text('Error processing token authentication', 500);
+    }
+})
+
+/**
+ * OAuth Callback Endpoint
+ *
+ * This route handles the callback after Xano authentication.
+ * It fetches user data, and completes the OAuth flow exactly like the GitHub example.
+ */
+app.get("/callback", async (c) => {
+    try {
+        // Get token and state from query parameters
+        const token = c.req.query("token");
+        const state = c.req.query("state");
+        
+        if (!token || !state) {
+            return c.text("Missing token or state parameter", 400);
+        }
+        
+        // Parse the original OAuth request info from state
+        const oauthReqInfo = JSON.parse(atob(state)) as AuthRequest;
+        if (!oauthReqInfo.clientId) {
+            return c.text("Invalid state", 400);
+        }
+        
+        // Fetch user info from Xano
+        const [userData, errResponse] = await fetchXanoUserInfo({
+            base_url: c.env.XANO_BASE_URL,
+            token,
+        });
+        
+        if (errResponse) {
+            return errResponse;
+        }
+        
+        // Extract user data
+        const userId = userData.id || token.substring(0, 10);
+        const name = userData.name || userData.email || 'Xano User';
+        const email = userData.email;
+        
+        // Complete authorization exactly like GitHub example
+        const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
+            request: oauthReqInfo,
+            userId,
+            metadata: {
+                label: name,
+            },
+            scope: oauthReqInfo.scope,
+            // This will be available as this.props inside MyMCP
+            props: {
+                accessToken: token,
+                name,
+                email,
+                apiKey: token,
+                authenticated: true,
+            } as Props,
+        });
+        
+        return Response.redirect(redirectTo);
+    } catch (error) {
+        console.error("Error in callback endpoint:", error);
+        return c.text("Error completing authentication", 500);
+    }
+});
+
+// Health check endpoint
+app.get('/health', (c) => {
+    return c.json({ status: 'ok', server: 'Xano MCP OAuth Server' });
+});
+
+// Function to render the login form
+function renderLoginForm(state: string, errorMessage?: string): string {
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Snappy MCP Authentication</title>
+  <title>Xano MCP Authentication</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -112,10 +327,10 @@ function loginForm(state: string, errorMessage?: string) {
 <body>
   <div class="container">
     <div class="logo">
-      <h1>Snappy MCP Server</h1>
+      <h1>Xano MCP Server</h1>
     </div>
     
-    <form action="/authorize" method="GET">
+    <form action="/login" method="POST">
       <input type="hidden" name="state" value="${state}">
       
       ${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
@@ -142,11 +357,14 @@ function loginForm(state: string, errorMessage?: string) {
     </div>
     
     <div id="token-form" style="display: none; margin-top: 20px;">
-      <div class="form-group">
-        <label for="auth_token">API Token</label>
-        <input type="text" id="auth_token" name="auth_token">
-      </div>
-      <button id="submit-token" type="button">Authenticate with Token</button>
+      <form action="/token-auth" method="GET">
+        <input type="hidden" name="state" value="${state}">
+        <div class="form-group">
+          <label for="token">API Token</label>
+          <input type="text" id="token" name="token" required>
+        </div>
+        <button type="submit">Authenticate with Token</button>
+      </form>
     </div>
   </div>
   
@@ -161,300 +379,16 @@ function loginForm(state: string, errorMessage?: string) {
         tokenForm.style.display = 'none';
       }
     });
-    
-    // Handle token submission
-    document.getElementById('submit-token').addEventListener('click', function() {
-      const token = document.getElementById('auth_token').value;
-      if (!token) {
-        alert('Please enter a valid API token');
-        return;
-      }
-      
-      // Build redirect URL with token
-      const url = new URL(window.location.href);
-      url.searchParams.set('auth_token', token);
-      
-      // Redirect to authorization with token
-      window.location.href = url.toString();
-    });
   </script>
 </body>
 </html>`;
 }
 
-// Handle OAuth authorization endpoint
-app.get('/authorize', async (c) => {
-  try {
-    console.log('Authorization endpoint called');
-    
-    // Always parse the OAuth request first (this is what CloudFlare example does)
-    const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
-    console.log('Parsed OAuth request info:', oauthReqInfo);
-    
-    // Extract the form or query parameters for later usage
-    let formData;
-    try {
-      // Try to parse form data if available (POST request)
-      const contentType = c.req.header('Content-Type') || '';
-      if (contentType.includes('application/x-www-form-urlencoded')) {
-        formData = await c.req.parseBody();
-      }
-    } catch (error) {
-      console.log('Error parsing form data:', error);
-    }
-
-    // We need to ensure we're using a consistent client ID through both authorization and token exchange
-    // Default to the playground client ID if none is provided
-    const clientId = oauthReqInfo.clientId || "xXjCNLDsDV4VB2nG";
-    oauthReqInfo.clientId = clientId;
-    console.log('Setting consistent client ID for entire flow:', clientId);
-
-    // Set a consistent redirect URI
-    if (!oauthReqInfo.redirectUri) {
-      oauthReqInfo.redirectUri = "https://playground.ai.cloudflare.com/oauth/callback";
-      console.log('Added default redirect URI');
-    }
-
-    if (!oauthReqInfo.responseType) {
-      oauthReqInfo.responseType = "code";
-      console.log('Added default response type');
-    }
-    
-    // Get query parameters 
-    const params = new URL(c.req.url).searchParams;
-    
-    // Check if this is a login form submission
-    const email = params.get('email');
-    const password = params.get('password');
-    const authToken = params.get('auth_token');
-    const state = params.get('state');
-    
-    console.log('Auth parameters:', { hasEmail: !!email, hasPassword: !!password, hasToken: !!authToken });
-    
-    // Log the state parameter for debugging
-    console.log('State parameter received:', state);
-    
-    // If this is a first visit (no credentials), show the login form
-    if (!email && !password && !authToken) {
-      return c.html(loginForm(state || ''));
-    }
-    
-    // Process email/password authentication
-    if (email && password) {
-      try {
-        console.log('Processing login with email/password');
-        
-        // Call Xano login endpoint
-        const loginResponse = await fetch(`${c.env.XANO_BASE_URL}/api:e6emygx3/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        
-        if (!loginResponse.ok) {
-          console.error('Xano login failed');
-          return c.html(loginForm(state || '', 'Invalid email or password. Please try again.'));
-        }
-        
-        // Extract user data with token
-        const userData = await loginResponse.json();
-        const token = userData.authToken || userData.api_key;
-        
-        if (!token) {
-          console.error('No token in Xano response');
-          return c.html(loginForm(state || '', 'Authentication succeeded but no token was returned.'));
-        }
-        
-        console.log("Authentication successful, completing OAuth flow");
-
-        // Prepare user data
-        const userId = userData.id || 'xano_user';
-        const label = userData.name || email || 'Xano User';
-        const props = {
-          apiKey: token,
-          userId: userId,
-          authenticated: true,
-          userDetails: {
-            name: userData.name || null,
-            email: userData.email || email
-          }
-        };
-
-        // Now complete the authorization with the enhanced request object
-        // We need to copy exactly what the GitHub example does
-        console.log("Starting OAuth completion with enhanced request object:", oauthReqInfo);
-
-        try {
-          // Log the exact request structure before authorization completion
-          console.log("About to complete authorization with:", {
-            clientId: oauthReqInfo.clientId,
-            redirectUri: oauthReqInfo.redirectUri,
-            responseType: oauthReqInfo.responseType,
-            scope: oauthReqInfo.scope || [],
-            hasToken: !!token,
-            userId
-          });
-
-          // This is the critical part - the exact format matters for the token exchange
-          const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
-            request: oauthReqInfo,
-            userId: userId,
-            metadata: { label },
-            // Include both in props AND as params for the token exchange
-            scope: oauthReqInfo.scope || [],
-            props: {
-              // Include the token as accessToken just like GitHub example does
-              accessToken: token,
-              apiKey: token,
-              userId: userId,
-              authenticated: true,
-              clientId: oauthReqInfo.clientId, // Explicitly include the client ID in props
-              userDetails: {
-                name: userData.name || null,
-                email: userData.email || email
-              }
-            }
-          });
-
-          console.log("Authorization successfully completed with redirectTo:", redirectTo);
-
-          // Redirect back to the client application
-          return Response.redirect(redirectTo, 302);
-        } catch (authError) {
-          console.error("Error during authorization completion:", authError);
-          throw authError;
-        }
-      } catch (error) {
-        console.error('Error authenticating with Xano:', error);
-        return c.html(loginForm(state || '', 'Server error during authentication. Please try again.'));
-      }
-    }
-    
-    // Process token authentication
-    if (authToken) {
-      try {
-        console.log('Processing direct token authentication');
-        
-        // Verify token with Xano
-        const response = await fetch(`${c.env.XANO_BASE_URL}/api:e6emygx3/auth/me`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (!response.ok) {
-          console.error('Token validation failed');
-          return c.html(loginForm(state || '', 'Invalid token. Please login with your credentials.'));
-        }
-        
-        // Extract user data
-        const userData = await response.json();
-        
-        console.log("Token authentication successful, completing OAuth flow");
-
-        // Create auth data with proper user details
-        const userId = userData.id || 'xano_user';
-        const label = userData.name || userData.email || 'Xano User';
-        const tokenToUse = userData.api_key || authToken;
-        const props = {
-          apiKey: tokenToUse,
-          userId: userId,
-          authenticated: true,
-          userDetails: {
-            name: userData.name || null,
-            email: userData.email || null
-          }
-        };
-
-        // Complete the authorization with the enhanced request object
-        console.log("Starting OAuth completion with enhanced request object:", oauthReqInfo);
-
-        try {
-          // Log the exact request structure before authorization completion
-          console.log("About to complete authorization with token auth:", {
-            clientId: oauthReqInfo.clientId,
-            redirectUri: oauthReqInfo.redirectUri,
-            responseType: oauthReqInfo.responseType,
-            scope: oauthReqInfo.scope || [],
-            hasToken: !!tokenToUse,
-            userId
-          });
-
-          // This is the critical part - the exact format matters for the token exchange
-          const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
-            request: oauthReqInfo,
-            userId: userId,
-            metadata: { label },
-            // Include both in props AND as params for the token exchange
-            scope: oauthReqInfo.scope || [],
-            props: {
-              // Include the token as accessToken just like GitHub example does
-              accessToken: tokenToUse,
-              apiKey: tokenToUse,
-              userId: userId,
-              authenticated: true,
-              clientId: oauthReqInfo.clientId, // Explicitly include the client ID in props
-              userDetails: {
-                name: userData.name || null,
-                email: userData.email || null
-              }
-            }
-          });
-
-          console.log("Authorization successfully completed with redirectTo:", redirectTo);
-
-          // Redirect back to the client application
-          return Response.redirect(redirectTo, 302);
-        } catch (authError) {
-          console.error("Error during authorization completion:", authError);
-          throw authError;
-        }
-      } catch (error) {
-        console.error('Error validating token:', error);
-        return c.html(loginForm(state || '', 'Error validating token. Please login with your credentials.'));
-      }
-    }
-    
-    // Default case - show login form
-    return c.html(loginForm(state || ''));
-  } catch (error) {
-    console.error('Error in /authorize endpoint:', error);
-    return c.text('Server error during authorization', 500);
-  }
-});
-
-// Health check endpoint
-app.get('/health', (c) => {
-  return c.json({ status: 'ok', server: 'Snappy MCP OAuth Server' });
-});
-
-// Handle token endpoint - explicit handler to fix client ID mismatch issues
-app.post('/token', async (c) => {
-  try {
-    console.log('Token endpoint called directly');
-
-    // Parse the token request form data
-    const formData = await c.req.parseBody();
-    console.log('Token request form data:', formData);
-
-    // Extract grant type and code
-    const grantType = formData.grant_type;
-    const code = formData.code;
-    const clientId = formData.client_id || "xXjCNLDsDV4VB2nG";
-
-    console.log(`Processing token request: grant_type=${grantType}, code=${code?.substring(0, 10)}..., client_id=${clientId}`);
-
-    // Let the OAuth provider handle the token exchange with the enhanced request
-    return c.env.OAUTH_PROVIDER.fetch(c.req.raw);
-  } catch (error) {
-    console.error('Error in /token endpoint:', error);
-    return c.json({ error: 'server_error', error_description: 'Internal server error' }, 500);
-  }
-});
-
 // Class to handle fetch requests using the Hono app
 export class XanoHandlerClass {
-  async fetch(request: Request, env: any) {
-    return app.fetch(request, env);
-  }
+    async fetch(request: Request, env: any) {
+        return app.fetch(request, env);
+    }
 }
 
 // Export handler instance

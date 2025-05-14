@@ -3,18 +3,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { XanoHandler } from "./xano-handler";
-import { makeApiRequest, getMetaApiUrl, formatId } from "./utils";
+import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
 
-// Authentication properties interface - includes all the data we want to store about the authenticated user
-export type XanoAuthProps = {
-  apiKey: string;
-  userId: string;
-  authenticated: boolean;
-  userDetails?: {
-    name?: string;
-    email?: string;
-  };
-};
+// Use the Props type from utils.ts as XanoAuthProps
+export type XanoAuthProps = Props;
 
 // Define MCP agent for Xano
 export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
@@ -351,7 +343,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
   }
 }
 
-// Create a new OAuthProvider instance with the correct pattern
+// Create a new OAuthProvider instance following the GitHub pattern exactly
 export default new OAuthProvider({
   kvNamespace: "OAUTH_KV",
   apiRoute: "/sse",
@@ -363,29 +355,17 @@ export default new OAuthProvider({
   // Set these values to improve compatibility with OAuth clients
   forceHTTPS: true,
   refreshEndpoint: "/refresh",
-  // Make the OAuth provider more permissive with client validation
-  autoApproveAllClients: true,
-  // This implements client validation for OAuth token exchange
-  // For token exchange, we need to accept any client ID that's presented
+  // Client lookup function to validate OAuth clients
   lookupClient: async (clientId) => {
     console.log("Client lookup called with ID:", clientId);
 
-    // The key fix: Always use the same client ID for validation
-    // This forces the CloudFlare OAuth provider to accept the client
-    // during token exchange, preventing the "Client ID mismatch" error
-    const knownClientId = "xXjCNLDsDV4VB2nG"; // Default playground client ID
+    // Accept any client ID and return a valid client with that ID
+    // This matches the GitHub pattern and preserves the client ID throughout the flow
+    const validClientId = clientId || "playground-client";
 
-    // If this is a token exchange request, we want to match the client ID
-    // that was used during the authorization request
-    const useClientId = clientId || knownClientId;
-
-    console.log("Using client ID for validation:", useClientId);
-
-    // Return a valid client with the appropriate redirect URIs
     return {
-      id: useClientId, // IMPORTANT: Return the SAME client ID that was provided
+      id: validClientId,
       name: "Xano MCP Client",
-      // Include all possible redirect URIs to ensure validation
       redirectURIs: [
         "https://playground.ai.cloudflare.com/oauth/callback",
         "http://localhost:8080/callback",
@@ -401,4 +381,5 @@ export interface Env {
   MCP_OBJECT: DurableObjectNamespace;
   OAUTH_KV: KVNamespace;
   XANO_BASE_URL: string;
+  COOKIE_ENCRYPTION_KEY: string;
 }

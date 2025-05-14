@@ -1,4 +1,105 @@
 /**
+ * Fetches an authentication token from Xano.
+ *
+ * @param {Object} options
+ * @param {string} options.base_url - The Xano base URL.
+ * @param {string} options.email - The user's email.
+ * @param {string} options.password - The user's password.
+ *
+ * @returns {Promise<[string, null] | [null, Response]>} A promise that resolves to an array containing the access token or an error response.
+ */
+export async function fetchXanoAuthToken({
+  base_url,
+  email,
+  password,
+}: {
+  base_url: string;
+  email: string;
+  password: string;
+}): Promise<[string, null] | [null, Response]> {
+  if (!email || !password) {
+    return [null, new Response("Missing credentials", { status: 400 })];
+  }
+
+  try {
+    const response = await fetch(`${base_url}/api:e6emygx3/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    
+    if (!response.ok) {
+      console.error("Xano login failed");
+      return [null, new Response("Authentication failed", { status: 401 })];
+    }
+    
+    const userData = await response.json();
+    const token = userData.authToken || userData.api_key;
+    
+    if (!token) {
+      return [null, new Response("Missing token in response", { status: 400 })];
+    }
+    
+    return [token, null];
+  } catch (error) {
+    console.error("Error fetching Xano token:", error);
+    return [null, new Response("Server error during authentication", { status: 500 })];
+  }
+}
+
+/**
+ * Fetches user info from Xano using an access token.
+ *
+ * @param {Object} options
+ * @param {string} options.base_url - The Xano base URL.
+ * @param {string} options.token - The authentication token.
+ *
+ * @returns {Promise<[any, null] | [null, Response]>} A promise that resolves to an array containing the user data or an error response.
+ */
+export async function fetchXanoUserInfo({
+  base_url,
+  token,
+}: {
+  base_url: string;
+  token: string;
+}): Promise<[any, null] | [null, Response]> {
+  if (!token) {
+    return [null, new Response("Missing token", { status: 400 })];
+  }
+
+  try {
+    const response = await fetch(`${base_url}/api:e6emygx3/auth/me`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      console.error("Failed to fetch user info");
+      return [null, new Response("Failed to fetch user info", { status: response.status })];
+    }
+    
+    const userData = await response.json();
+    return [userData, null];
+  } catch (error) {
+    console.error("Error fetching user info:", error);
+    return [null, new Response("Server error fetching user info", { status: 500 })];
+  }
+}
+
+// Context from the auth process, encrypted & stored in the auth token
+// and provided to the DurableMCP as this.props
+export type Props = {
+  accessToken: string;
+  name: string | null;
+  email: string | null;
+  apiKey: string;  // Same as accessToken for Xano
+  authenticated: boolean;
+};
+
+/**
  * Helper function to extract token from a request
  * Tries both URL parameters and Authorization header
  */
@@ -17,78 +118,37 @@ export function extractToken(request: Request): string | null {
   return null;
 }
 
-// Interface for API request parameters
-interface ApiParams {
-  [key: string]: string | number | boolean | null | undefined;
-}
-
-// Interface for API request options
-interface ApiRequestOptions {
-  method: string;
-  headers: Record<string, string>;
-  body?: string;
-}
-
-/**
- * Utility function to make API requests
- * Handles token authentication, query parameters, and error responses
- */
-export async function makeApiRequest(
-  url: string,
-  token: string,
-  method = "GET",
-  data: Record<string, any> | null = null,
-  params: ApiParams | null = null
-) {
-  const headers = {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type": "application/json",
-    "Accept": "application/json"
-  };
-
+// Utility function to make API requests
+export async function makeApiRequest(url: string, token: string, method = "GET", data?: any) {
   try {
-    const options: ApiRequestOptions = {
-      method,
-      headers
+    const headers: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
     };
-
-    if (data && method !== "GET") {
+    
+    const options: RequestInit = {
+      method,
+      headers,
+    };
+    
+    if (data && (method === "POST" || method === "PUT" || method === "PATCH")) {
       options.body = JSON.stringify(data);
     }
-
-    // Add query parameters
-    if (params) {
-      const queryParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-          queryParams.append(key, value.toString());
-        }
-      });
-      url = `${url}?${queryParams.toString()}`;
-    }
-
+    
     const response = await fetch(url, options);
-
-    if (response.status === 200) {
-      return await response.json();
-    } else {
-      return {
-        error: `API request failed with status ${response.status}`,
-        details: await response.text()
-      };
+    
+    if (!response.ok) {
+      return { error: `HTTP Error: ${response.status} ${response.statusText}` };
     }
-  } catch (error: any) {
-    console.error(`Exception during API request: ${error.message}`);
-    return {
-      error: `Exception during API request: ${error.message}`
-    };
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`API request error: ${error.message}`);
+    return { error: error.message };
   }
 }
 
-/**
- * Utility function to get meta API URL for a Xano instance
- * Handles different formats of instance names and URLs
- */
+// Utility to get meta API URL for an instance
 export function getMetaApiUrl(instanceName: string): string {
   if (instanceName.startsWith("http://") || instanceName.startsWith("https://")) {
     return `${instanceName}/api:meta`;
@@ -99,10 +159,7 @@ export function getMetaApiUrl(instanceName: string): string {
   }
 }
 
-/**
- * Utility function to format ID values for API requests
- * Ensures consistent handling of string and numeric IDs
- */
+// Format ID for Xano API (accept string or number)
 export function formatId(idValue: string | number | null | undefined): string | null {
   if (idValue === null || idValue === undefined) {
     return null;

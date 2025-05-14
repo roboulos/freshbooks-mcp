@@ -1,216 +1,144 @@
-# OAuth Implementation Details
+# OAuth Implementation for Xano MCP Server
 
-This document provides technical details about the OAuth 2.0 implementation used in the Cloudflare MCP server for persistent authentication with Xano.
+This document explains the OAuth implementation used in the Xano MCP Server, which follows CloudFlare's GitHub OAuth example pattern to resolve client ID mismatch issues.
 
-## Authentication Architecture
+## Overview
 
-The authentication system is built on Cloudflare's OAuthProvider pattern, which enables persistent authentication across Durable Object hibernation periods. This ensures that users don't need to re-authenticate every time the Durable Object wakes up after periods of inactivity.
+The Xano MCP Server implements an OAuth 2.0 authorization code flow to allow secure access to Xano APIs through the CloudFlare AI Playground and other clients. This implementation follows the pattern established in CloudFlare's GitHub OAuth example (https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-github-oauth).
 
-### Core Components
+## Key Components
 
-1. **OAuthProvider** (index.ts)
-   - Configured as the default export from the worker
-   - Manages the OAuth flow and token persistence
-   - Routes authentication requests to appropriate endpoints
-   - Maintains connection with authenticated state
+1. **OAuthProvider Configuration** (`src/index.ts`):
+   - Sets up the OAuth provider with endpoints for authorization, token exchange, and client registration
+   - Implements a custom `lookupClient` function that preserves client IDs throughout the OAuth flow
 
-2. **XanoHandler** (xano-handler.ts)
-   - Implements OAuth endpoints (authorize, token, refresh)
-   - Provides the login UI for user authentication
-   - Handles Xano API authentication (both email/password and token methods)
-   - Manages token storage in KV with appropriate expiration
+2. **Xano Handler** (`src/xano-handler.ts`):
+   - Creates routes for handling the OAuth authorization flow
+   - Implements the client approval dialog
+   - Manages the Xano-specific authentication process
+   - Preserves OAuth state throughout redirects
 
-3. **KV Storage**
-   - Stores access and refresh tokens with prefixes
-   - Maintains token state across worker restarts
-   - Implements proper expiration for security
+3. **OAuth Utilities** (`src/workers-oauth-utils.ts`):
+   - Handles client approval through cookies
+   - Renders the approval dialog
+   - Manages state encoding/decoding and cookie security
 
-4. **Hono Framework**
-   - Provides routing and middleware capabilities
-   - Handles request/response processing
-   - Simplifies endpoint implementation
+4. **Xano Utilities** (`src/utils.ts`):
+   - Provides functions for authenticating with Xano
+   - Defines the Props type for storing authenticated user data
+   - Implements API utility functions
 
-## OAuth Flow Implementation
+## Authentication Flow
 
-### 1. Authorization Endpoint (`/authorize`)
+The authentication flow follows these steps:
 
-The authorization endpoint presents a login form where users can authenticate using either:
-- Xano email and password
-- Direct API token input
+1. **Client Requests Authorization**:
+   - A client (e.g., CloudFlare AI Playground) initiates authorization by sending a request to `/authorize`
+   - The request includes client_id, redirect_uri, and other OAuth parameters
+
+2. **Approval Dialog**:
+   - If the client hasn't been approved before, an approval dialog is shown
+   - User can approve or deny the client's access request
+   - OAuth request parameters are preserved in the state
+
+3. **Xano Authentication**:
+   - After approval, the user is redirected to a Xano login form
+   - User can authenticate with email/password or direct API token
+   - Authentication is done via Xano's authentication endpoints
+
+4. **Authorization Completion**:
+   - After successful authentication, the flow continues to the callback endpoint
+   - The original OAuth request is reconstructed from the state
+   - The authorization is completed with the user's Xano token and ID
+   - User is redirected back to the client application with an authorization code
+
+5. **Token Exchange**:
+   - The client exchanges the authorization code for access tokens
+   - The token is used for subsequent API requests to the MCP server
+
+## Key Implementation Details
+
+### State Preservation
+
+The OAuth flow preserves state through base64-encoded JSON objects passed in URL parameters. This ensures the client ID and other OAuth parameters remain consistent throughout redirects:
 
 ```typescript
-app.get('/authorize', async (c) => {
-  const clientId = c.req.query('client_id');
-  const redirectUri = c.req.query('redirect_uri');
-  const state = c.req.query('state');
-  const responseType = c.req.query('response_type');
-  const error = c.req.query('error');
-  
-  // Render login form with both email/password and token options
-  // Authenticate with Xano
-  // Generate authorization code
-  // Redirect to callback URL with code
-});
+// Encode state for passing through redirects
+const state = btoa(JSON.stringify(oauthReqInfo));
 ```
 
-When authentication succeeds:
-1. An authorization code is generated
-2. The user is redirected to the callback URL with the code
-3. The code is temporarily stored in KV with a short expiration
+### Client Approval
 
-### 2. Token Endpoint (`/token`)
-
-The token endpoint exchanges an authorization code for access and refresh tokens:
+User approval for clients is managed through encrypted cookies, allowing returning users to skip the approval step:
 
 ```typescript
-app.post('/token', async (c) => {
-  // Extract grant_type, code, redirect_uri, client_id
-  // Validate the authorization code
-  // Generate access and refresh tokens
-  // Store tokens in KV with appropriate expiration
-  // Return tokens in standard OAuth response format
-});
-```
-
-Key aspects:
-- Supports both JSON and form-encoded requests
-- Uses standard OAuth 2.0 response format
-- Stores tokens with proper prefixes in KV
-- Sets appropriate expiration times
-
-### 3. Refresh Endpoint (`/refresh`)
-
-The refresh endpoint allows clients to obtain a new access token using a refresh token:
-
-```typescript
-app.post('/refresh', async (c) => {
-  // Extract refresh token
-  // Validate refresh token from KV
-  // Generate new access token
-  // Update KV storage
-  // Return new access token and refresh token
-});
-```
-
-## Token Storage Pattern
-
-Tokens are stored in KV with specific prefixes and optimized for retrieval:
-
-1. **Authorization Codes**:
-   - Prefix: `auth_code:`
-   - Expiration: 10 minutes
-   - Format: `auth_code:{code} -> {clientId}:{redirectUri}`
-
-2. **Access Tokens**:
-   - Prefix: `access_token:`
-   - Expiration: 60 minutes (configurable)
-   - Format: `access_token:{token} -> {userData JSON}`
-
-3. **Refresh Tokens**:
-   - Prefix: `refresh_token:`
-   - Expiration: 30 days (configurable)
-   - Format: `refresh_token:{token} -> {accessToken}`
-
-## Request Authentication Flow
-
-1. Client makes request to `/sse` endpoint
-2. OAuthProvider checks for existing authentication
-3. If not authenticated, redirects to `/authorize`
-4. User authenticates with Xano
-5. Authorization code is exchanged for tokens
-6. Subsequent requests use the access token
-7. If token expires, refresh flow is triggered
-
-## Xano Authentication Methods
-
-### Email/Password Authentication
-
-The server authenticates with Xano's API using email and password:
-
-```typescript
-async function authenticateWithXano(email, password) {
-  const response = await fetch(`${XANO_BASE_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  
-  if (!response.ok) {
-    // Handle authentication error
-  }
-  
-  const data = await response.json();
-  return data.authToken; // Extract API token
+// Check if client is already approved
+if (await clientIdAlreadyApproved(request, clientId, cookieSecret)) {
+  // Skip approval dialog
 }
 ```
 
-### Direct Token Authentication
+### Client ID Consistency
 
-Alternatively, users can provide a Xano API token directly:
+The implementation ensures the same client ID is used throughout the flow by:
+
+1. Storing the client ID in the request state
+2. Recovering it during the callback
+3. Using a consistent `lookupClient` function that preserves client IDs:
 
 ```typescript
-async function validateXanoToken(token) {
-  // Make a test API call to verify token validity
-  const response = await fetch(`${XANO_BASE_URL}/api/auth/me`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  
-  return response.ok; // Return true if token is valid
+lookupClient: async (clientId) => {
+  const validClientId = clientId || "playground-client";
+  return {
+    id: validClientId,
+    // ...other client properties
+  };
 }
 ```
 
-## Security Considerations
+## Environment Variables
 
-1. **Token Expiration**: Access tokens expire after 60 minutes
-2. **HTTPS Enforcement**: All authentication is done over HTTPS
-3. **Token Storage**: Tokens are stored with appropriate KV expiration
-4. **Error Handling**: Detailed error handling for security issues
-5. **No Sensitive Data Exposure**: Login credentials never stored, only tokens
-6. **Token Validation**: All tokens validated before use
+The implementation requires these environment variables:
 
-## Debug Endpoints
+- `XANO_BASE_URL`: The base URL for your Xano instance
+- `COOKIE_ENCRYPTION_KEY`: Secret key for encrypting approval cookies
 
-For troubleshooting authentication issues, the implementation includes debug endpoints:
+## Troubleshooting
 
-1. **Status Endpoint** (`/status`):
-   - Returns current authentication status
-   - Requires bearer token for access
-   - Shows token expiration information
+### Client ID Mismatch Errors
 
-2. **Debug OAuth Endpoint** (`/debug-oauth`):
-   - Shows detailed OAuth flow information
-   - Displays headers and request parameters
-   - Helps diagnose authentication issues
+If you encounter "Client ID mismatch" errors during token exchange:
 
-## Usage Example
+1. Ensure the same client ID is being passed through all steps of the flow
+2. Check the implementation of the `lookupClient` function
+3. Verify that state is being correctly encoded and decoded during redirects
 
-```javascript
-// Client-side code to connect to the MCP server with authentication
-const mcp = new MCPAgent({
-  url: "https://your-worker.your-account.workers.dev/sse",
-  // Authentication is handled by the server-side OAuth flow
-  // No manual token management needed on client side
-});
+### Authentication Failures
 
-// The connection will automatically:
-// 1. Redirect to login if needed
-// 2. Maintain authentication state
-// 3. Refresh tokens as needed
-// 4. Reconnect with preserved auth state
-```
+If authentication with Xano fails:
 
-## Implementation Decisions
+1. Check the XANO_BASE_URL environment variable
+2. Verify the authentication API endpoints are correct
+3. Check browser console for any CORS or network errors
 
-1. **Why OAuthProvider?**: Provides persistent authentication across Durable Object hibernation
-2. **Why KV Storage?**: Reliable, low-latency storage for tokens with proper expiration
-3. **Why Web UI Login?**: More user-friendly than requiring API token knowledge
-4. **Why Authorization Code Flow?**: More secure than implicit flow, following OAuth best practices
-5. **Why Refresh Tokens?**: Allows for long-lived sessions without compromising security
+## Lessons Learned
 
-## Additional Customization
+1. **Importance of State Preservation**: The OAuth flow relies heavily on preserving state across multiple redirects. Any loss of state can break the flow.
 
-The OAuth implementation can be customized by modifying:
-- Token expiration times in `xano-handler.ts`
-- Login form UI in the `/authorize` endpoint
-- Token storage patterns in the token-related endpoints
-- Authentication validation logic in utility functions
+2. **Client ID Consistency**: The client ID must remain consistent from the initial authorization request through the token exchange.
+
+3. **CloudFlare OAuth Provider Pattern**: Following CloudFlare's established patterns (like the GitHub OAuth example) is crucial for compatibility with their tools.
+
+4. **Cookie-Based Approvals**: Using cookies for storing client approvals improves the user experience for returning users.
+
+5. **Environment Variables**: Proper environment variable management is essential for secure cookie encryption and API access.
+
+## Acknowledgements
+
+This implementation adapts CloudFlare's GitHub OAuth example pattern to work with Xano's authentication system. Special thanks to the CloudFlare team for providing the example implementation that helped resolve the client ID mismatch issues.
+
+## References
+
+- [CloudFlare GitHub OAuth Example](https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-github-oauth)
+- [OAuth 2.0 Authorization Code Grant](https://oauth.net/2/grant-types/authorization-code/)
+- [CloudFlare Workers OAuth Provider](https://github.com/cloudflare/workers-sdk/tree/main/packages/workers-oauth-provider)
