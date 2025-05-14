@@ -1,52 +1,60 @@
-# Xano MCP Server with Simple Authentication
+# Xano MCP Server with Basic Token Authentication
 
-A minimal implementation of a Cloudflare Workers-based MCP (Model Context Protocol) server that authenticates with Xano. This server enables AI assistants like Claude to securely interact with your Xano backend using token-based authentication.
+A minimal implementation of a Cloudflare Workers-based MCP (Model Context Protocol) server that passes through Xano authentication tokens. This server enables AI assistants like Claude to interact with your Xano backend using simple token-based authentication.
 
-## ✅ VERIFIED WORKING SOLUTION - SIMPLE TOKEN VALIDATION
+## ✅ BASIC TOKEN PASSTHROUGH - SIMPLEST APPROACH
 
-This implementation has been verified to work correctly with:
-- Cloudflare AI Playground
-- Cloudflare Workers and Durable Objects
-- Xano authentication
-- Claude AI assistant
+This implementation provides the most straightforward approach to connecting Claude with Xano:
+- Passes the auth_token from URL parameters to Xano
+- Validates tokens against Xano's API
+- Shows MCP tools when a valid token is provided
+- No session state or persistence
 
 ## Implementation Details & Limitations
 
-This is the **simple token validation** implementation with the following characteristics:
+This is the **basic token passthrough** implementation with the following characteristics:
 
 ### What This Implementation Does
-- Validates Xano tokens on each request
-- Uses a simple authentication approach without session persistence
-- Implements a basic Durable Object for MCP functionality
-- Provides a clean, minimal codebase that's easy to understand and extend
+- Extracts auth_token from URL parameters or Authorization headers
+- Validates tokens against Xano's API endpoint (auth/me)
+- Provides a simple authentication context for tools
+- Shows MCP tools when authenticated
+- Implements minimal code with no complex OAuth flows
 
 ### Limitations & Considerations
-- **No Session Persistence**: Authentication state is not preserved across Durable Object hibernation
-- **No Token Storage**: Tokens must be provided with each request
-- **No Refresh Logic**: No built-in token refresh or expiration handling
-- **Re-Authentication Required**: If the Durable Object hibernates, users must re-authenticate
-- **Minimal Error Handling**: Basic error reporting without detailed user feedback
+- **No Session Persistence**: Authentication is validated on each request
+- **No Tool State**: Each hibernation resets any tool context or state
+- **Simple Validation**: Only checks if token is valid, with minimal error handling
+- **Reconnection Issues**: Tools disappear when the Durable Object hibernates
+- **No OAuth Flow**: No login UI, token must be provided manually
 
 ### When to Use This Implementation
-- For development and testing with Xano
-- For projects where authentication simplicity is preferred over robustness
-- For scenarios where re-authentication is acceptable
-- When you need a minimal implementation to build upon
+- For quick testing or proof-of-concept with Xano
+- When you want the simplest possible implementation
+- For learning how basic MCP authentication works
+- When persistent authentication isn't required
 
 ## Branch Information
 
-For a more advanced implementation with persistent authentication state using OAuthProvider, check out the `oauth-provider-experiment` branch:
+This repository is organized into branches with increasing functionality:
+
+1. **`main`** (current): The simplest implementation - basic token validation
+2. **`xano-tools`**: Adds Xano API tools but lacks persistence (tools disappear on hibernation)
+3. **`oauth-provider`**: Full OAuth implementation with persistent session state
+
 ```bash
-git checkout oauth-provider-experiment
+# For implementations with more features:
+git checkout xano-tools     # For Xano API tools (but no persistence)
+git checkout oauth-provider # For persistent OAuth authentication (recommended)
 ```
 
 ## Features
 
 - **Minimalist MCP Server**: Clean, simple implementation with no dependencies beyond the core SDK
-- **Basic Xano Authentication**: Validates access tokens against Xano's API on each request
-- **Multiple Connection Methods**: Supports both SSE (browser) and streamable HTTP connections
+- **Basic Xano Authentication**: Passes and validates access tokens against Xano's API
+- **Multiple Connection Methods**: Supports both SSE (browser) and HTTP connections
 - **Type Safety**: Full TypeScript support for better developer experience
-- **Easy to Extend**: Add your own tools to interact with Xano's API
+- **Easy to Understand**: Simple codebase that's perfect for learning how MCP works
 
 ## Prerequisites
 
@@ -67,11 +75,10 @@ git checkout oauth-provider-experiment
    npm install
    ```
 
-3. Update your Xano URL in `wrangler.jsonc`:
-   ```json
-   "vars": {
-     "XANO_BASE_URL": "https://YOUR-INSTANCE.n7c.xano.io"
-   }
+3. Update your Xano URL in `wrangler.toml`:
+   ```toml
+   [vars]
+   XANO_BASE_URL = "https://YOUR-INSTANCE.n7c.xano.io"
    ```
 
 4. Deploy to Cloudflare:
@@ -79,7 +86,7 @@ git checkout oauth-provider-experiment
    npx wrangler deploy
    ```
 
-5. Connect via Cloudflare AI Playground:
+5. Connect using Claude or the Cloudflare AI Playground:
    ```
    https://your-worker.your-account.workers.dev/sse?auth_token=YOUR_XANO_TOKEN
    ```
@@ -88,155 +95,55 @@ git checkout oauth-provider-experiment
 
 ### Authentication Flow
 
-1. Client connects with a Xano token via URL parameter (`?auth_token=...`) or Authorization header (`Bearer ...`)
-2. Server validates the token with Xano's API on every request
-3. If valid, creates a simple authentication context (`{ user: { id: 'xano_user', authenticated: true } }`)
-4. Tools check `this.props?.user?.authenticated` before executing
-5. If the Durable Object hibernates, the authentication state is lost and re-authentication is required
+1. Client connects with a Xano token via URL parameter (`?auth_token=...`) or Authorization header
+2. Server validates the token with Xano's `/auth/me` API endpoint
+3. If valid, creates a simple authentication context for the MCP agent
+4. Tools check for authentication before executing
+5. No session state is maintained - token is validated on each request
 
 ### Key Files
 
-- `src/index.ts`: The main MCP server implementation
-- `wrangler.jsonc`: Cloudflare Worker configuration
+- `src/index.ts`: The main MCP server implementation with token extraction and validation
+- `wrangler.toml`: Cloudflare Worker configuration
 
 ## Technical Implementation
 
 The implementation uses a single file approach with three main components:
 
-1. **Token Extraction & Validation**
-   - Simple token extraction from URL parameters or Authorization header
-   - Basic validation against Xano's API
+1. **Token Extraction**
+   - Extracts tokens from URL parameters or Authorization headers
+   - No token storage or management
 
-2. **MCP Agent Class (Durable Object)**
-   - Minimal MCP implementation with authentication checks
-   - No state persistence for authentication
+2. **Xano Validation**
+   - Simple validation against Xano's `/auth/me` endpoint
+   - Creates a basic authentication context object
 
-3. **Request Handler**
-   - Routes requests to the appropriate MCP endpoints
-   - Creates a new authentication context on each request
-
-## Code Explanation
-
-### Authentication Context
-
-```typescript
-interface AuthContext {
-  user?: {
-    id: string;
-    authenticated: boolean;
-  };
-}
-```
-
-### Token Extraction
-
-```typescript
-function extractToken(request) {
-  // Check URL parameters
-  const url = new URL(request.url);
-  const urlToken = url.searchParams.get('auth_token');
-  if (urlToken) return urlToken;
-  
-  // Check Authorization header
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.substring(7);
-  }
-  
-  return null;
-}
-```
-
-### MCP Agent with Tool
-
-```typescript
-export class MyMCP extends McpAgent<Env, unknown, AuthContext> {
-  server = new McpServer({
-    name: "Xano MCP Server",
-    version: "1.0.0",
-  });
-  
-  async init() {
-    this.server.tool(
-      "hello",
-      { name: z.string() },
-      async ({ name }) => {
-        // Check authentication
-        if (!this.props?.user?.authenticated) {
-          return {
-            content: [{ type: "text", text: "Authentication required to use this tool." }]
-          };
-        }
-        
-        return {
-          content: [{ type: "text", text: `Hello, ${name}! You are authenticated as ${this.props.user.id}.` }]
-        };
-      }
-    );
-  }
-}
-```
-
-### Request Handler with Token Validation
-
-```typescript
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    
-    // Extract and validate token
-    const token = extractToken(request);
-    let authContext = {};
-    
-    if (token) {
-      try {
-        const response = await fetch(`${env.XANO_BASE_URL}/api:e6emygx3/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          authContext = {
-            user: {
-              id: 'xano_user',
-              authenticated: true
-            }
-          };
-        }
-      } catch (error) {
-        console.error('Error validating token:', error);
-      }
-    }
-    
-    // Serve the appropriate endpoint with auth context
-    if (url.pathname === "/sse" || url.pathname === "/sse/message") {
-      return MyMCP.serveSSE("/sse", authContext).fetch(request, env, ctx);
-    }
-    
-    if (url.pathname === "/mcp") {
-      return MyMCP.serve("/mcp", authContext).fetch(request, env, ctx);
-    }
-    
-    return new Response("Not found", { status: 404 });
-  },
-};
-```
+3. **MCP Agent**
+   - Sets up a basic MCP agent with authentication checks
+   - Minimal implementation with no persistence
 
 ## Adding Your Own Tools
 
-To add new tools that interact with Xano:
+To add new tools:
 
-1. Add new tool registrations in the `init()` method
+1. Add tool registrations in the `init()` method of the MCP agent class
 2. Use `this.props?.user?.authenticated` to check authentication
-3. Make API calls to your Xano backend using fetch
+3. Make direct API calls to Xano as needed
 
 ## Troubleshooting
 
-- **"Session not found" error**: This may occur after hibernation. Re-authenticate by providing the token again.
-- **Authentication failures**: Verify your Xano token and API endpoint
-- **Deployment issues**: Check your wrangler.jsonc configuration
-- **Authentication lost after inactivity**: This is expected behavior with this implementation. Use the oauth-provider-experiment branch for persistent sessions.
+- **Tools disappear after inactivity**: This is expected - this implementation has no persistence
+- **Authentication failures**: Verify your Xano token is valid
+- **"Authentication required" messages**: Make sure your token is being passed correctly
+
+## Moving to More Advanced Implementations
+
+When you outgrow this implementation:
+
+1. **Need Xano tools?** Use the `xano-tools` branch for basic Xano API operations
+2. **Need persistence?** Use the `oauth-provider` branch for full OAuth flow with session persistence
+
+The **oauth-provider** branch solves the hibernation issue where tools disappear, by implementing a proper OAuth flow that maintains authentication state.
 
 ## Resources
 
