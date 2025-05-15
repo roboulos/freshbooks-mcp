@@ -339,14 +339,34 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       color: #555;
     }
     .security-info {
-      text-align: center;
       margin-bottom: 20px;
+    }
+    .security-box {
+      display: flex;
+      align-items: flex-start;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .security-icon {
+      flex-shrink: 0;
+      margin-right: 15px;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .security-icon svg {
+      color: #333;
     }
     .security-info p {
       font-size: 14px;
-      color: #666;
+      color: #555;
       margin: 0;
-      padding: 0 10px;
+      line-height: 1.5;
+      text-align: left;
     }
     .divider {
       margin: 30px 0;
@@ -386,13 +406,16 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       Sign in with your Snappy account to securely access your Xano tools
     </div>
 
-    <div class="xano-integration">
-      <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/kKpEd_P4IzKLwI56TxBpyiksfwE/hR7YwQ../xano_logo.jpeg" alt="Xano Logo">
-      <span>Give AI access to your Xano instance while keeping your API key secure</span>
-    </div>
-
     <div class="security-info">
-      <p>Snappy MCP protects your credentials and enables Claude AI to safely interact with your Xano data.</p>
+      <div class="security-box">
+        <div class="security-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <p>Snappy keeps your credentials and API keys secure. Your data stays protected while AI interacts with your apps.</p>
+      </div>
     </div>
 
     <form action="/login" method="POST">
