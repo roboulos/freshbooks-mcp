@@ -188,7 +188,15 @@ app.get("/callback", async (c) => {
         const userId = userData.id || token.substring(0, 10);
         const name = userData.name || userData.email || 'Xano User';
         const email = userData.email;
-        
+        // Extract API key from auth/me response
+        const apiKey = userData.api_key || token;
+
+        console.log("User data from /auth/me:", {
+            hasApiKey: !!userData.api_key,
+            apiKeyPrefix: userData.api_key ? userData.api_key.substring(0, 20) + '...' : null,
+            userIdFromResponse: userData.id
+        });
+
         // Complete authorization exactly like GitHub example
         const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
             request: oauthReqInfo,
@@ -202,7 +210,7 @@ app.get("/callback", async (c) => {
                 accessToken: token,
                 name,
                 email,
-                apiKey: token,
+                apiKey: apiKey, // Use the API key from auth/me response
                 authenticated: true,
             } as Props,
         });

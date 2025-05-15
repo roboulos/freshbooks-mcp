@@ -24,7 +24,9 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         console.log("DEBUG_AUTH TOOL CALLED", {
           hasProps: !!this.props,
           authenticated: this.props?.authenticated,
-          hasApiKey: !!this.props?.apiKey
+          hasApiKey: !!this.props?.apiKey,
+          apiKeyType: this.props?.apiKey ? typeof this.props.apiKey : 'undefined',
+          apiKeyLength: this.props?.apiKey ? this.props.apiKey.length : 0
         });
 
         return {
@@ -32,10 +34,13 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             type: "text",
             text: "Auth debug info: " + JSON.stringify({
               apiKey: !!this.props?.apiKey,
-              apiKeyPrefix: this.props?.apiKey ? this.props.apiKey.substring(0, 10) + "..." : null,
+              apiKeyPrefix: this.props?.apiKey ? this.props.apiKey.substring(0, 20) + "..." : null,
+              apiKeyType: this.props?.apiKey ? typeof this.props.apiKey : 'undefined',
+              apiKeyLength: this.props?.apiKey ? this.props.apiKey.length : 0,
               userId: this.props?.userId,
-              authenticated: this.props?.authenticated,
-              userDetails: this.props?.userDetails
+              name: this.props?.name,
+              email: this.props?.email,
+              authenticated: this.props?.authenticated
             }, null, 2)
           }]
         };

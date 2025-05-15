@@ -33,6 +33,7 @@ This is the **persistent authentication with OAuthProvider** implementation, whi
 - **Persistent Tokens**: Maintains authentication state across Durable Object hibernation
 - **Token Refreshing**: Automatically handles token expiration and refreshing
 - **Connection Resilience**: Reconnects with preserved authentication state
+- **API Key Extraction**: Properly extracts and uses the Xano API key from auth/me response
 
 ### Advantages Over Other Branches
 - **Login UI**: Interactive login with direct email/password or token options
@@ -40,6 +41,7 @@ This is the **persistent authentication with OAuthProvider** implementation, whi
 - **User-Friendly**: Better authentication experience for non-technical users
 - **Enhanced Security**: Proper token management and storage practices
 - **Code Organization**: Uses Hono framework for routing and request handling
+- **Compatibility**: Works with both AI Playground and Claude Desktop applications
 
 ## Features
 
@@ -221,6 +223,47 @@ We successfully resolved the "Client ID mismatch" error by implementing the foll
    - Used the same client ID during both authorization and token exchange
 
 See the [OAuth Implementation Documentation](./OAUTH_IMPLEMENTATION.md) for a detailed technical explanation of how this solution works.
+
+## API Key Extraction and Claude Integration
+
+### API Key Extraction Fix
+
+We implemented a crucial fix that properly extracts the Xano API key from the `/auth/me` response:
+
+1. **Problem**: Initially, the OAuth flow was using the authentication token from the `/auth/login` endpoint for both authentication and API access, but Xano requires the special API key returned by `/auth/me` for Meta API operations.
+
+2. **Solution**:
+   - Modified the callback handler to extract `userData.api_key` from the `/auth/me` response
+   - Added proper fallback to the auth token if the API key is not present
+   - Enhanced logging to verify API key extraction
+
+3. **Implementation**:
+   - In `xano-handler.ts`, the callback function now explicitly extracts the API key:
+   ```typescript
+   const apiKey = userData.api_key || token;
+   ```
+   - This API key is then stored in the OAuth props and made available to all MCP tools
+
+### Working with Claude Applications
+
+This implementation has been verified to work with:
+
+1. **CloudFlare AI Playground**:
+   - Direct integration through the `/sse` endpoint
+   - Full OAuth flow with Xano authentication
+   - Allows use of all Xano tools
+
+2. **Claude Desktop**:
+   - Connect using the server URL: `https://your-worker.your-account.workers.dev/sse`
+   - You'll be directed through the same OAuth flow
+   - Xano tools will be available in the desktop interface
+   - Authentication persists across sessions
+
+3. **Integration Notes**:
+   - The first connection will trigger the OAuth flow with login
+   - Subsequent connections will use stored tokens if available
+   - Client approval cookies reduce login frequency for returning users
+   - API key is properly stored and used for all Xano API operations
 
 ## Troubleshooting
 
