@@ -294,23 +294,36 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
           
           .header {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             margin-bottom: 1.5rem;
           }
-          
+
           .logo {
-            width: 180px;
+            width: 220px;
             height: auto;
-            margin-right: 1rem;
-            border-radius: 8px;
+            margin-bottom: 1rem;
             object-fit: contain;
           }
-          
+
           .title {
             margin: 0;
             font-size: 1.3rem;
             font-weight: 400;
+            display: none; /* Hide the title text since logo is enough */
+          }
+
+          .xano-logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 1.5rem 0;
+          }
+
+          .xano-logo {
+            height: 30px;
+            margin-right: 10px;
           }
           
           .alert {
@@ -432,10 +445,15 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
           <div class="precard">
             <div class="header">
               ${logoUrl ? `<img src="${logoUrl}" alt="${serverName} Logo" class="logo">` : ''}
-            <h1 class="title"><strong>${serverName}</strong></h1>
+              <h1 class="title"><strong>${serverName}</strong></h1>
             </div>
-            
+
             ${serverDescription ? `<p class="description">${serverDescription}</p>` : ''}
+
+            <div class="xano-logo-container">
+              <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/kKpEd_P4IzKLwI56TxBpyiksfwE/hR7YwQ../xano_logo.jpeg" alt="Xano Logo" class="xano-logo">
+              <span>Secure access to your Xano tools</span>
+            </div>
           </div>
             
           <div class="card">

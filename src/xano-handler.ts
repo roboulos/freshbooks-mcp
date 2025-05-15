@@ -311,8 +311,8 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       margin-bottom: 20px;
     }
     .logo img {
-      max-width: 200px;
-      margin-bottom: 10px;
+      max-width: 220px;
+      margin-bottom: 20px;
     }
     .tagline {
       text-align: center;
