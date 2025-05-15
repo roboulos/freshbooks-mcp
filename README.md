@@ -203,26 +203,26 @@ To add new tools with persistent authentication:
 3. Use the stored API key with `this.props.apiKey` for Xano API calls
 4. Add any additional authentication requirements as needed
 
-## Implementation Approach: Resolving the Client ID Mismatch
+## Implementation Approach: Solving Key OAuth Challenges
 
-We successfully resolved the "Client ID mismatch" error by implementing the following solutions:
+After extensive development and experimentation, we successfully solved several challenging OAuth implementation issues:
 
-1. **Following the GitHub Example Pattern Exactly**:
-   - Implemented the multi-step OAuth flow exactly as in the CloudFlare GitHub OAuth example
-   - Used the same file structure and approach but adapted for Xano authentication
-   - Created approval, login, and callback steps in the exact same pattern
+1. **Multi-Step OAuth Flow with User Authentication**:
+   - Designed a complete OAuth flow with approval dialog, login form, and callback handling
+   - Created a custom implementation tailored specifically for Xano's authentication system
+   - Built the flow with user experience in mind, including clear error states and guidance
 
 2. **State Preservation Through All Redirects**:
-   - Encoded the full OAuth request info in state parameters
-   - Passed state through each step of the flow consistently
-   - Reconstructed the original authorization request during the callback
+   - Developed a robust state management system for the OAuth flow
+   - Implemented base64 encoding/decoding for state preservation during redirects
+   - Created a solution for maintaining context throughout the multi-step process
 
-3. **Client ID Consistency**:
-   - Maintained the same client ID throughout the entire OAuth flow
-   - Implemented a `lookupClient` function that preserves the original client ID
-   - Used the same client ID during both authorization and token exchange
+3. **Client ID Management and Authentication**:
+   - Built a custom client identification system with flexible validation
+   - Implemented proper token exchange with authentication maintenance
+   - Ensured client ID consistency across the entire authentication lifecycle
 
-See the [OAuth Implementation Documentation](./OAUTH_IMPLEMENTATION.md) for a detailed technical explanation of how this solution works.
+See the [OAuth Implementation Documentation](./OAUTH_IMPLEMENTATION.md) for a detailed technical explanation of this implementation.
 
 ## API Key Extraction and Claude Integration
 
@@ -254,16 +254,34 @@ This implementation has been verified to work with:
    - Allows use of all Xano tools
 
 2. **Claude Desktop**:
-   - Connect using the server URL: `https://your-worker.your-account.workers.dev/sse`
-   - You'll be directed through the same OAuth flow
-   - Xano tools will be available in the desktop interface
-   - Authentication persists across sessions
+   - Requires specific configuration in the Claude Desktop settings
+   - Uses the MCP Remote protocol to connect to the server
+   - Authentication persists across sessions with OAuth
+   - Full support for all Xano API operations
 
-3. **Integration Notes**:
+3. **Claude Desktop Configuration**:
+   ```json
+   {
+     "mcpServers": {
+       "xano-mcp": {
+         "command": "npx",
+         "args": [
+           "mcp-remote",
+           "https://your-worker.your-account.workers.dev/sse"
+         ]
+       }
+     }
+   }
+   ```
+
+4. **Integration Notes**:
    - The first connection will trigger the OAuth flow with login
    - Subsequent connections will use stored tokens if available
    - Client approval cookies reduce login frequency for returning users
-   - API key is properly stored and used for all Xano API operations
+   - API key is properly extracted from the `/auth/me` response
+   - All Xano API operations use the correct API key
+   - Avoid duplicate tool names in your configuration (can cause conflicts)
+   - After changing configuration, restart Claude Desktop for changes to take effect
 
 ## Troubleshooting
 
@@ -273,12 +291,25 @@ This implementation has been verified to work with:
 - **Web UI Issues**: Try with a different browser or incognito mode
 - **Debugging**: Access `/debug-oauth` endpoint for diagnostic information
 - **Client ID Errors**: Check the "Client lookup for ID" logs in the worker logs
+- **Tool Conflicts**: Ensure no duplicate MCP servers with similar tool names in Claude Desktop config
+- **API Key Issues**: Use the `debug_auth` tool to verify API key extraction
+- **Claude Desktop Connection**: Check logs in `~/Library/Logs/Claude/mcp-server-*.log`
+- **Xano API Errors**: Check for valid API key and proper Xano instance name format
 
 ### Debugging Endpoints
 
 - `/health`: Check if the server is running correctly
 - `/status`: View current authentication status (requires bearer token)
 - `/debug-oauth`: Debug endpoint with request and authentication information
+
+### Claude Desktop Tips
+
+- **Duplicate Tools**: If you have other Xano MCP servers configured, they may conflict with this implementation. Temporarily disable them if tools aren't showing up.
+- **Config Changes**: After updating configuration, fully quit and restart Claude Desktop.
+- **Logs Location**: Check `~/Library/Logs/Claude/` directory for detailed server logs.
+- **Authentication Flow**: The first tool use will trigger OAuth authentication.
+- **Tool Verification**: Start with simple tools like `debug_auth` or `whoami` to verify connectivity.
+- **Testing Best Practices**: Use clear tool names in prompts: "Please use the xano_list_instances tool."
 
 ## Resources
 

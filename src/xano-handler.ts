@@ -211,6 +211,7 @@ app.get("/callback", async (c) => {
                 name,
                 email,
                 apiKey: apiKey, // Use the API key from auth/me response
+                userId: userId, // Explicitly set userId for hello tool
                 authenticated: true,
             } as Props,
         });

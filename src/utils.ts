@@ -95,7 +95,8 @@ export type Props = {
   accessToken: string;
   name: string | null;
   email: string | null;
-  apiKey: string;  // Same as accessToken for Xano
+  apiKey: string;  // The API key from auth/me response
+  userId: string;  // User ID from auth/me response
   authenticated: boolean;
 };
 
