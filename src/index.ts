@@ -370,7 +370,7 @@ export default new OAuthProvider({
 
     return {
       id: validClientId,
-      name: "Xano MCP Client",
+      name: "Snappy MCP Client",
       redirectURIs: [
         "https://playground.ai.cloudflare.com/oauth/callback",
         "http://localhost:8080/callback",

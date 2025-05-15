@@ -27,9 +27,9 @@ app.get('/authorize', async (c) => {
     return renderApprovalDialog(c.req.raw, {
         client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
         server: {
-            name: "Xano MCP Server",
-            logo: "https://app.xano.com/favicon-32x32.png",
-            description: 'This MCP server allows you to interact with your Xano instance through Claude.', 
+            name: "Snappy MCP Server",
+            logo: "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/325/zap_26a1.png",
+            description: 'Connect your Xano instance to Claude with Snappy MCP - the easiest way to use Xano tools.', 
         },
         state: { oauthReqInfo }, // Pass OAuth request info through approval process
     })
@@ -225,7 +225,7 @@ app.get("/callback", async (c) => {
 
 // Health check endpoint
 app.get('/health', (c) => {
-    return c.json({ status: 'ok', server: 'Xano MCP OAuth Server' });
+    return c.json({ status: 'ok', server: 'Snappy MCP Server' });
 });
 
 // Function to render the login form
@@ -235,7 +235,7 @@ function renderLoginForm(state: string, errorMessage?: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Xano MCP Authentication</title>
+  <title>Snappy MCP Authentication</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -282,7 +282,7 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       box-sizing: border-box;
     }
     button {
-      background-color: #007bff;
+      background-color: #FF4500; /* Snappy orange */
       color: white;
       border: none;
       border-radius: 4px;
@@ -290,10 +290,13 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       font-size: 16px;
       width: 100%;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
+      box-shadow: 0 2px 5px rgba(255, 69, 0, 0.3);
     }
     button:hover {
-      background-color: #0069d9;
+      background-color: #FF6347;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(255, 69, 0, 0.4);
     }
     .error {
       color: #dc3545;
@@ -336,7 +339,7 @@ function renderLoginForm(state: string, errorMessage?: string): string {
 <body>
   <div class="container">
     <div class="logo">
-      <h1>Xano MCP Server</h1>
+      <h1>Snappy MCP Server ⚡</h1>
     </div>
     
     <form action="/login" method="POST">

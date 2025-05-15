@@ -19,7 +19,7 @@ export interface AuthProps {
 // MCP Agent implementation with Xano tools
 export class MyMCP extends McpAgent<Env, unknown, AuthProps> {
   server = new McpServer({
-    name: "Xano MCP Server",
+    name: "Snappy MCP Server",
     version: "1.0.0",
   });
   
