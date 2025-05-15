@@ -28,7 +28,7 @@ app.get('/authorize', async (c) => {
         client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
         server: {
             name: "Snappy MCP Server",
-            logo: "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/325/zap_26a1.png",
+            logo: "https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/XmHFEalO-FuKgcZQCCuxtdniBvk/U3GjRA../snappy+logo.png",
             description: 'Connect your Xano instance to Claude with Snappy MCP - the easiest way to use Xano tools.', 
         },
         state: { oauthReqInfo }, // Pass OAuth request info through approval process
@@ -249,11 +249,12 @@ function renderLoginForm(state: string, errorMessage?: string): string {
     }
     .container {
       background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+      padding: 35px;
       width: 100%;
-      max-width: 400px;
+      max-width: 440px;
+      border: 1px solid #eaeaea;
     }
     h1 {
       color: #333;
@@ -310,6 +311,34 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       text-align: center;
       margin-bottom: 20px;
     }
+    .logo img {
+      max-width: 200px;
+      margin-bottom: 10px;
+    }
+    .tagline {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #666;
+      font-size: 16px;
+      line-height: 1.4;
+    }
+    .xano-integration {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+    }
+    .xano-integration img {
+      height: 30px;
+      margin-right: 10px;
+    }
+    .xano-integration span {
+      font-size: 14px;
+      color: #555;
+    }
     .divider {
       margin: 30px 0;
       border-top: 1px solid #eee;
@@ -339,12 +368,21 @@ function renderLoginForm(state: string, errorMessage?: string): string {
 <body>
   <div class="container">
     <div class="logo">
-      <h1>Snappy MCP Server ⚡</h1>
+      <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/XmHFEalO-FuKgcZQCCuxtdniBvk/U3GjRA../snappy+logo.png" alt="Snappy Logo">
     </div>
-    
+
+    <div class="tagline">
+      Sign in to access your Xano tools through Claude AI
+    </div>
+
+    <div class="xano-integration">
+      <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/kKpEd_P4IzKLwI56TxBpyiksfwE/hR7YwQ../xano_logo.jpeg" alt="Xano Logo">
+      <span>Connect your Xano account for seamless AI integration</span>
+    </div>
+
     <form action="/login" method="POST">
       <input type="hidden" name="state" value="${state}">
-      
+
       ${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
       
       <div class="form-group">
@@ -365,17 +403,18 @@ function renderLoginForm(state: string, errorMessage?: string): string {
     </div>
     
     <div class="alt-method">
-      If you have a Xano API token, you can <a href="#" id="use-token">use it directly</a>.
+      Alternatively, you can <a href="#" id="use-token">use your Xano API token directly</a>.
     </div>
-    
+
     <div id="token-form" style="display: none; margin-top: 20px;">
       <form action="/token-auth" method="GET">
         <input type="hidden" name="state" value="${state}">
         <div class="form-group">
-          <label for="token">API Token</label>
-          <input type="text" id="token" name="token" required>
+          <label for="token">Xano API Token</label>
+          <input type="text" id="token" name="token" required placeholder="Paste your Xano API token here">
+          <small style="display: block; margin-top: 5px; color: #666;">Find this in your Xano dashboard under Account Settings</small>
         </div>
-        <button type="submit">Authenticate with Token</button>
+        <button type="submit">Connect with API Token</button>
       </form>
     </div>
   </div>
