@@ -314,16 +314,45 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
             display: none; /* Hide the title text since logo is enough */
           }
 
-          .xano-logo-container {
+          .feature-boxes {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 1.5rem 0;
+          }
+
+          .feature-box {
+            display: flex;
+            align-items: flex-start;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
+
+          .feature-icon {
+            flex-shrink: 0;
+            margin-right: 15px;
+            width: 30px;
+            height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 1.5rem 0;
+          }
+
+          .feature-icon svg {
+            color: #333;
           }
 
           .xano-logo {
             height: 30px;
-            margin-right: 10px;
+            width: auto;
+          }
+
+          .feature-text {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.5;
           }
           
           .alert {
@@ -444,15 +473,35 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
         <div class="container">
           <div class="precard">
             <div class="header">
-              ${logoUrl ? `<img src="${logoUrl}" alt="${serverName} Logo" class="logo">` : ''}
+              <a href="https://snappy.ai" target="_blank">
+                ${logoUrl ? `<img src="${logoUrl}" alt="${serverName} Logo" class="logo">` : ''}
+              </a>
               <h1 class="title"><strong>${serverName}</strong></h1>
             </div>
 
             ${serverDescription ? `<p class="description">${serverDescription}</p>` : ''}
 
-            <div class="xano-logo-container">
-              <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/kKpEd_P4IzKLwI56TxBpyiksfwE/hR7YwQ../xano_logo.jpeg" alt="Xano Logo" class="xano-logo">
-              <span>Secure access to your Xano tools</span>
+            <div class="feature-boxes">
+              <div class="feature-box">
+                <div class="feature-icon">
+                  <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/kKpEd_P4IzKLwI56TxBpyiksfwE/hR7YwQ../xano_logo.jpeg" alt="Xano Logo" class="xano-logo">
+                </div>
+                <div class="feature-text">
+                  By giving access, you'll enable AI to diagnose your system, build applications, and do more using the Snappy Remote MCP.
+                </div>
+              </div>
+
+              <div class="feature-box">
+                <div class="feature-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </div>
+                <div class="feature-text">
+                  Snappy keeps your credentials and API keys secure. Your data stays protected while AI interacts with your Xano instance.
+                </div>
+              </div>
             </div>
           </div>
             
