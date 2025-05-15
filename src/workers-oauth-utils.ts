@@ -300,8 +300,8 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
           }
           
           .logo {
-            width: 48px;
-            height: 48px;
+            width: 180px;
+            height: auto;
             margin-right: 1rem;
             border-radius: 8px;
             object-fit: contain;
@@ -386,8 +386,9 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
           }
           
           .button-primary {
-            background-color: var(--primary-color);
-            color: white;
+            background-color: #FEDA31; /* Snappy yellow */
+            color: black;
+            border: 1px solid black;
           }
           
           .button-secondary {

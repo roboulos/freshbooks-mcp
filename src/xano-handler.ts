@@ -283,21 +283,20 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       box-sizing: border-box;
     }
     button {
-      background-color: #FF4500; /* Snappy orange */
-      color: white;
-      border: none;
+      background-color: #FEDA31; /* Snappy yellow */
+      color: black;
+      border: 1px solid black;
       border-radius: 4px;
       padding: 12px 20px;
       font-size: 16px;
       width: 100%;
       cursor: pointer;
       transition: all 0.2s;
-      box-shadow: 0 2px 5px rgba(255, 69, 0, 0.3);
+      font-weight: 500;
     }
     button:hover {
-      background-color: #FF6347;
+      background-color: #FFE55C;
       transform: translateY(-1px);
-      box-shadow: 0 4px 8px rgba(255, 69, 0, 0.4);
     }
     .error {
       color: #dc3545;
@@ -339,6 +338,16 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       font-size: 14px;
       color: #555;
     }
+    .security-info {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .security-info p {
+      font-size: 14px;
+      color: #666;
+      margin: 0;
+      padding: 0 10px;
+    }
     .divider {
       margin: 30px 0;
       border-top: 1px solid #eee;
@@ -372,12 +381,16 @@ function renderLoginForm(state: string, errorMessage?: string): string {
     </div>
 
     <div class="tagline">
-      Sign in to access your Xano tools through Claude AI
+      Sign in with your Snappy account to securely access your Xano tools
     </div>
 
     <div class="xano-integration">
       <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/kKpEd_P4IzKLwI56TxBpyiksfwE/hR7YwQ../xano_logo.jpeg" alt="Xano Logo">
-      <span>Connect your Xano account for seamless AI integration</span>
+      <span>Give AI access to your Xano instance while keeping your API key secure</span>
+    </div>
+
+    <div class="security-info">
+      <p>Snappy MCP protects your credentials and enables Claude AI to safely interact with your Xano data.</p>
     </div>
 
     <form action="/login" method="POST">
@@ -398,39 +411,10 @@ function renderLoginForm(state: string, errorMessage?: string): string {
       <button type="submit">Sign In</button>
     </form>
     
-    <div class="divider">
-      <span>OR</span>
-    </div>
-    
-    <div class="alt-method">
-      Alternatively, you can <a href="#" id="use-token">use your Xano API token directly</a>.
-    </div>
-
-    <div id="token-form" style="display: none; margin-top: 20px;">
-      <form action="/token-auth" method="GET">
-        <input type="hidden" name="state" value="${state}">
-        <div class="form-group">
-          <label for="token">Xano API Token</label>
-          <input type="text" id="token" name="token" required placeholder="Paste your Xano API token here">
-          <small style="display: block; margin-top: 5px; color: #666;">Find this in your Xano dashboard under Account Settings</small>
-        </div>
-        <button type="submit">Connect with API Token</button>
-      </form>
-    </div>
+    <!-- API Token option removed as requested -->
   </div>
   
-  <script>
-    // Handle token input toggle
-    document.getElementById('use-token').addEventListener('click', function(e) {
-      e.preventDefault();
-      const tokenForm = document.getElementById('token-form');
-      if (tokenForm.style.display === 'none') {
-        tokenForm.style.display = 'block';
-      } else {
-        tokenForm.style.display = 'none';
-      }
-    });
-  </script>
+  <!-- JavaScript removed as token option was removed -->
 </body>
 </html>`;
 }
