@@ -57,6 +57,7 @@ This is the **persistent authentication with OAuthProvider** implementation, whi
 - A Cloudflare account with Workers access and KV storage
 - A Xano instance with authentication API endpoint
 - npm and wrangler CLI installed
+- **IMPORTANT**: The latest version of mcp-remote (`npm install -g mcp-remote@latest`) is required for Claude Desktop to properly open the authentication browser window
 
 ## Project Status and Implementation Progress
 
@@ -266,13 +267,14 @@ This implementation has been verified to work with:
        "xano-mcp": {
          "command": "npx",
          "args": [
-           "mcp-remote",
+           "mcp-remote@latest",
            "https://your-worker.your-account.workers.dev/sse"
          ]
        }
      }
    }
    ```
+   **Critical Note**: Always use `mcp-remote@latest` to ensure proper authentication browser window handling. Older versions may fail to open the browser popup.
 
 4. **Integration Notes**:
    - The first connection will trigger the OAuth flow with login

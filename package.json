@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "postinstall": "npm install -g mcp-remote@latest"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.0.5",
     "@modelcontextprotocol/sdk": "^1.11.1",
     "agents": "^0.0.80",
     "hono": "^4.2.7",
+    "mcp-remote": "^0.1.5",
     "zod": "^3.24.4"
   },
   "devDependencies": {
