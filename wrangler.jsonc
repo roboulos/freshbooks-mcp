@@ -25,6 +25,7 @@
     }
   ],
   "vars": {
-    "XANO_BASE_URL": "https://xnwv-v1z6-dvnr.n7c.xano.io"
+    "XANO_BASE_URL": "https://xnwv-v1z6-dvnr.n7c.xano.io",
+    "COOKIE_ENCRYPTION_KEY": "secure-oauth-cookie-encryption-key-for-xano-mcp"
   }
 }
