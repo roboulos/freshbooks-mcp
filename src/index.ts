@@ -556,7 +556,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/meta`;
           
           // Only include fields that are provided
           const data: any = {};
@@ -686,22 +686,48 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema`;
+          const schemaUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema`;
           
-          const data = {
+          // First get the current schema
+          const currentSchema = await makeApiRequest(schemaUrl, token);
+          
+          if (currentSchema.error) {
+            return {
+              content: [{ type: "text", text: `Error getting current schema: ${currentSchema.error}` }]
+            };
+          }
+          
+          // Create the new field
+          const newField = {
             name: field_name,
             type: field_type,
             description: description || "",
             nullable: nullable !== undefined ? nullable : false,
-            default: default_value,
             required: required !== undefined ? required : false,
             access: access || "public",
             sensitive: sensitive !== undefined ? sensitive : false,
-            style: style || "single",
-            validators: validators || null
+            style: style || "single"
           };
           
-          const result = await makeApiRequest(url, token, "POST", data);
+          // Add default value if provided
+          if (default_value !== undefined) {
+            newField["default"] = default_value;
+          }
+          
+          // Add validators if provided
+          if (validators) {
+            newField["validators"] = validators;
+          }
+          
+          // Add the new field to the schema
+          const updatedSchema = currentSchema.schema || [];
+          updatedSchema.push(newField);
+          
+          // Prepare data for updating schema
+          const data = { schema: updatedSchema };
+          
+          // Update the schema
+          const result = await makeApiRequest(schemaUrl, token, "PUT", data);
 
           if (result.error) {
             return {
