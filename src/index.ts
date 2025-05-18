@@ -873,7 +873,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const baseUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row`;
+          const baseUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content`;
           
           // Add pagination parameters to URL
           const params = new URLSearchParams();
@@ -938,7 +938,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row/search`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/search`;
           
           const data = {
             search: search_conditions || [],
@@ -1001,7 +1001,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row/${formatId(record_id)}`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/${formatId(record_id)}`;
           const result = await makeApiRequest(url, token);
 
           if (result.error) {
@@ -1056,7 +1056,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content`;
           const result = await makeApiRequest(url, token, "POST", record_data);
 
           if (result.error) {
@@ -1112,7 +1112,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row/${formatId(record_id)}`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/${formatId(record_id)}`;
           const result = await makeApiRequest(url, token, "PUT", record_data);
 
           if (result.error) {
@@ -1167,7 +1167,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row/${formatId(record_id)}`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/${formatId(record_id)}`;
           const result = await makeApiRequest(url, token, "DELETE");
 
           if (result.error) {
@@ -1223,7 +1223,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row/bulk`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/bulk`;
           
           const data = {
             records,
@@ -1287,7 +1287,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/row/bulk`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/bulk`;
           
           const result = await makeApiRequest(url, token, "PUT", { updates });
 
