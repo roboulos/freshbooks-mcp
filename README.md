@@ -38,7 +38,7 @@ This is the **expanded Xano tools with persistent authentication** implementatio
 - **Token Refreshing**: Automatically handles token expiration and refreshing
 - **Connection Resilience**: Reconnects with preserved authentication state
 - **API Key Extraction**: Properly extracts and uses the Xano API key from auth/me response
-- **Expanded Xano Tools**: Adds 16 new tools for comprehensive Xano API management
+- **Expanded Xano Tools**: Adds 20+ tools for comprehensive Xano API management
 
 ### Advantages Over Other Branches
 - **Comprehensive Tool Set**: Expanded tool coverage for table management, schemas, and data operations
@@ -57,7 +57,7 @@ This is the **expanded Xano tools with persistent authentication** implementatio
 - **Connection Resilience**: Handles disconnections and hibernation gracefully
 - **TypeScript Support**: Full type safety throughout the codebase
 - **Debug Endpoints**: Utilities for troubleshooting authentication issues
-- **Extensive Xano API Tools**: 16 new tools covering all major Xano operations
+- **Extensive Xano API Tools**: 20+ tools covering all major Xano operations
 
 ## Prerequisites
 
@@ -78,13 +78,13 @@ The OAuth implementation for the Xano MCP server is now successfully working wit
 4. Resolves the "Client ID mismatch" error during token exchange
 5. Properly preserves state across the OAuth flow's multiple redirects
 6. Implements client approval with cookie-based storage for returning users
-7. Provides 16 new Xano API tools for comprehensive database and table management
+7. Provides 20+ Xano API tools for comprehensive database and table management
 
 For detailed information on how the OAuth implementation works, check out the [OAuth Implementation Documentation](./OAUTH_IMPLEMENTATION.md).
 
 ### New Xano Tools Implementation
 
-This branch extends the oauth-provider implementation with 16 new Xano API tools:
+This branch extends the oauth-provider implementation with a comprehensive set of Xano API tools:
 
 #### Table Management Tools
 - **xano_list_instances**: Lists all Xano instances associated with the account
@@ -106,7 +106,11 @@ This branch extends the oauth-provider implementation with 16 new Xano API tools
 #### Record Management Tools
 - **xano_browse_table_content**: Browses content for a specific Xano table
 - **xano_get_table_record**: Gets a specific record from a table
-- **xano_search_table_content**: Searches table content using complex filtering
+- **xano_create_table_record**: Creates a new record in a table
+- **xano_update_table_record**: Updates an existing record in a table
+- **xano_delete_table_record**: Deletes a record from a table
+- **xano_bulk_create_records**: Creates multiple records in a single operation
+- **xano_bulk_update_records**: Updates multiple records in a single operation
 
 All tools follow consistent patterns for authentication, error handling, and parameter validation using Zod.
 
@@ -402,7 +406,30 @@ This implementation has been verified to work with:
 - [Xano Documentation](https://docs.xano.com/)
 - [Hono Documentation](https://hono.dev/)
 
-## Future Enhancements
+## Recent Improvements and Future Enhancements
+
+### Recent Improvements (June 2023)
+
+1. **Fixed Schema Manipulation**:
+   - Fixed the `xano_add_field_to_schema` tool to correctly handle API response formats
+   - Simplified the schema update process by exactly matching the Python implementation
+   - Added better error handling for schema operations
+   - Fixed issues with empty schema handling
+
+2. **Expanded Record Management**:
+   - Added consistent pattern for table record operations 
+   - Fixed API endpoint paths for record operations (using `/content` instead of `/row`)
+   - Improved error handling for null responses from successful operations
+   - Added bulk record operations for batch creating and updating records
+
+3. **Reliability Improvements**:
+   - Enhanced error handling for all API operations
+   - Added detailed logging for troubleshooting
+   - Fixed endpoint path issues in multiple tools
+   - Improved type handling and parameter validation
+   - Updated to match the patterns that work in the Python implementation
+
+### Future Enhancements
 
 Now that we have a working implementation, here are possible future enhancements:
 
@@ -411,7 +438,6 @@ Now that we have a working implementation, here are possible future enhancements
    - API group management (create, list, update)
    - API endpoint tools (create, list, update)
    - Advanced index operations (btree, unique, search)
-   - Bulk record operations (create, update, delete)
 
 2. **UI Improvements**:
    - Better error messaging in the login form

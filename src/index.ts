@@ -695,23 +695,31 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
+          
+          // Get table schema - following the exact Python implementation pattern
           const schemaUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema`;
+          console.log(`Fetching schema from ${schemaUrl}`);
           
           // First get the current schema
-          const currentSchemaResult = await makeApiRequest(schemaUrl, token);
+          const schemaResult = await makeApiRequest(schemaUrl, token);
           
-          if (currentSchemaResult.error) {
+          if (schemaResult.error) {
             return {
-              content: [{ type: "text", text: `Error getting current schema: ${currentSchemaResult.error}` }]
+              content: [{ type: "text", text: `Error getting table schema: ${schemaResult.error}` }]
             };
           }
+          
+          // In Python this is wrapped in {"schema": result}, but we'll handle both formats
+          const currentSchema = Array.isArray(schemaResult) ? schemaResult : schemaResult.schema || [];
+          
+          console.log(`Retrieved schema with ${currentSchema.length} fields`);
           
           // Create the new field
           const newField = {
             name: field_name,
             type: field_type,
             description: description || "",
-            nullable: nullable !== undefined ? nullable : true,
+            nullable: nullable !== undefined ? nullable : false,
             required: required !== undefined ? required : false,
             access: access || "public",
             sensitive: sensitive !== undefined ? sensitive : false,
@@ -728,64 +736,28 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             newField["validators"] = validators;
           }
           
-          // Get current schema 
-          const currentSchema = currentSchemaResult.schema || [];
+          console.log("Adding new field to schema:", field_name);
           
-          console.log("Current schema:", JSON.stringify(currentSchema, null, 2));
+          // Add the new field to the schema (simply append, just like Python implementation)
+          const updatedSchema = [...currentSchema, newField];
           
-          // Carefully handle the schema to ensure primary key remains first
-          // and all existing field structure is preserved
-          
-          // First, let's examine the schema closely
-          if (currentSchema.length === 0) {
-            console.error("Schema appears to be empty, which is unexpected");
-            return {
-              content: [{ type: "text", text: "Error: Cannot modify empty schema" }]
-            };
-          }
-          
-          // Find primary key field and verify it's first
-          const firstField = currentSchema[0];
-          if (firstField.name !== "id") {
-            console.error("Primary key is not the first field in schema", firstField);
-            return {
-              content: [{ type: "text", text: "Error: Schema structure is invalid - primary key should be first" }]
-            };
-          }
-          
-          // Create a new schema array with primary key first, then all other existing fields, then new field
-          const updatedSchema = [
-            currentSchema[0], // Primary key (id) field
-            ...currentSchema.slice(1),  // All other existing fields
-            newField           // The new field we're adding
-          ];
-          
-          // Double-check that primary key is still first
-          if (updatedSchema[0].name !== "id") {
-            console.error("Error: Primary key not preserved as first field");
-            return {
-              content: [{ type: "text", text: "Error: Failed to maintain schema structure" }]
-            };
-          }
-          
-          // Prepare data for updating schema
+          // Prepare data for updating schema - follow exactly the Python pattern
           const data = { schema: updatedSchema };
           
-          console.log("Updating schema with:", JSON.stringify(data, null, 2));
-          
           // Update the schema
+          console.log(`Updating schema at ${schemaUrl}`);
           const result = await makeApiRequest(schemaUrl, token, "PUT", data);
-
-          if (result.error) {
+          
+          if (result && result.error) {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              content: [{ type: "text", text: `Error updating schema: ${result.error}` }]
             };
           }
-
+          
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify(result || { success: true, message: "Field added successfully" })
             }]
           };
         } catch (error) {
