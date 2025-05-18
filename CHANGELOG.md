@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2024-05-18
+
+### Major Improvements
+
+1. **Standardized Response Format**
+   - Implemented a consistent structure with `success`, `data`, `message`, and `operation` fields
+   - Made error responses follow the same pattern with standardized error objects
+   - Eliminated inconsistency across different tool responses
+
+2. **Proper API Response Handling**
+   - Fixed critical issues with interpreting non-standard API responses (like empty arrays or null values)
+   - Added robust handling for bulk operations with their unique response formats
+   - Improved status code interpretation for various operations (particularly DELETEs)
+
+3. **Enhanced Schema Operations**
+   - Fixed schema field operations to properly maintain field order
+   - Improved field deletion and renaming operations to handle API responses correctly
+   - Better validation for schema-related parameters
+
+4. **Bulk Operations Support**
+   - Complete rewrite of bulk creation and update functionality
+   - Added proper format conversion between client and API expectations
+   - Implemented response transformation to provide useful update statistics
+
+5. **Error Handling and Reporting**
+   - More descriptive error messages with relevant context
+   - Proper error classification with appropriate error codes
+   - Distinction between API errors, validation errors, and exceptions
+
+### Specific Fixes
+
+1. **Schema Manipulation Fix**
+   - Fixed `xano_add_field_to_schema` tool that was causing errors when adding fields
+   - Simplified implementation to match the Python SDK approach
+   - Added better handling of schema responses
+
+2. **API Endpoint Path Fixes**
+   - Fixed several record operations using incorrect paths (`/row` instead of `/content`)
+   - Updated all endpoints to use the correct Xano API paths
+
+3. **Error Handling for Null Responses**
+   - Improved handling of DELETE operations that return null/empty responses (successful operations)
+   - Added special handling for Xano's bulk operation response format
+
+4. **Response Format Standardization**
+   - Standardized all tool responses with consistent format
+   - Added proper error classification with appropriate codes
+   - Added operation context to all responses
+
+5. **Bulk Operations Fixes**
+   - Fixed `xano_bulk_create_records` to use correct parameter name (`items` instead of `records`)
+   - Fixed `xano_bulk_update_records` endpoint and request method
+   - Added detection for partial success scenarios in bulk operations
+
+### Tool Enhancements
+
+1. **Added Tool Annotations**
+   - Added MCP tool annotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
+   - Improved tool descriptions and parameter documentation
+
+2. **Parameter Validation**
+   - Enhanced validation for all tool parameters
+   - Added better error messages for invalid parameters
+
+3. **Response Cleanup**
+   - Standardized success and error responses across all tools
+   - Added operation identifiers to all responses
+
 ## [1.2.0] - 2023-06-04
 
 ### Added
