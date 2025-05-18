@@ -2,30 +2,34 @@
 
 A Cloudflare Workers-based MCP (Model Context Protocol) server that authenticates with Xano and maintains persistent authentication state across Durable Object hibernation using OAuthProvider. This server enables AI assistants like Claude to securely interact with your Xano backend even after periods of inactivity.
 
-✅ **WORKING IMPLEMENTATION**: This branch now contains a fully functional OAuth implementation that successfully connects to the CloudFlare AI Playground with Xano authentication.
+✅ **WORKING IMPLEMENTATION**: This branch now contains a fully functional OAuth implementation that successfully connects to the CloudFlare AI Playground with Xano authentication and provides extensive Xano API tools for AI agents.
 
 ## Branch Information
 
-This repository is organized into three branches for different use cases:
+This repository is organized into several branches for different use cases:
 
 1. **`main`**: Minimal implementation with basic token validation
 2. **`xano-tools`**: Adds Xano API tools while maintaining simple token validation
-3. **`oauth-provider`** (current): Uses OAuthProvider for persistent authentication with email/password login
+3. **`oauth-provider`**: Uses OAuthProvider for persistent authentication with email/password login
+4. **`xano-tools-expansion`** (current): Extends the oauth-provider branch with an expanded set of Xano tools
 
 ```bash
 # For minimal implementation (stable)
 git checkout main
 
-# For implementation with Xano tools (recommended for most users)
+# For implementation with basic Xano tools
 git checkout xano-tools
 
 # For implementation with persistent OAuth (advanced)
 git checkout oauth-provider
+
+# For implementation with expanded Xano tools and persistent OAuth (recommended)
+git checkout xano-tools-expansion
 ```
 
 ## Implementation Details
 
-This is the **persistent authentication with OAuthProvider** implementation, which adds the following:
+This is the **expanded Xano tools with persistent authentication** implementation, which builds on the oauth-provider branch and adds:
 
 ### What This Implementation Does
 - **Web-based Authentication Form**: Login with Xano email/password or API token
@@ -34,8 +38,10 @@ This is the **persistent authentication with OAuthProvider** implementation, whi
 - **Token Refreshing**: Automatically handles token expiration and refreshing
 - **Connection Resilience**: Reconnects with preserved authentication state
 - **API Key Extraction**: Properly extracts and uses the Xano API key from auth/me response
+- **Expanded Xano Tools**: Adds 16 new tools for comprehensive Xano API management
 
 ### Advantages Over Other Branches
+- **Comprehensive Tool Set**: Expanded tool coverage for table management, schemas, and data operations
 - **Login UI**: Interactive login with direct email/password or token options
 - **Session Management**: Tokens persist even after Worker restarts or Durable Object hibernation
 - **User-Friendly**: Better authentication experience for non-technical users
@@ -51,6 +57,7 @@ This is the **persistent authentication with OAuthProvider** implementation, whi
 - **Connection Resilience**: Handles disconnections and hibernation gracefully
 - **TypeScript Support**: Full type safety throughout the codebase
 - **Debug Endpoints**: Utilities for troubleshooting authentication issues
+- **Extensive Xano API Tools**: 16 new tools covering all major Xano operations
 
 ## Prerequisites
 
@@ -71,8 +78,37 @@ The OAuth implementation for the Xano MCP server is now successfully working wit
 4. Resolves the "Client ID mismatch" error during token exchange
 5. Properly preserves state across the OAuth flow's multiple redirects
 6. Implements client approval with cookie-based storage for returning users
+7. Provides 16 new Xano API tools for comprehensive database and table management
 
 For detailed information on how the OAuth implementation works, check out the [OAuth Implementation Documentation](./OAUTH_IMPLEMENTATION.md).
+
+### New Xano Tools Implementation
+
+This branch extends the oauth-provider implementation with 16 new Xano API tools:
+
+#### Table Management Tools
+- **xano_list_instances**: Lists all Xano instances associated with the account
+- **xano_get_instance_details**: Gets details for a specific Xano instance
+- **xano_list_databases**: Lists all databases (workspaces) in a specific Xano instance
+- **xano_get_workspace_details**: Gets details for a specific Xano workspace
+- **xano_list_tables**: Lists all tables in a specific Xano workspace
+- **xano_get_table_details**: Gets details for a specific Xano table
+- **xano_create_table**: Creates a new table in a workspace
+- **xano_update_table**: Updates an existing table in a workspace
+- **xano_delete_table**: Deletes a table from a workspace
+
+#### Schema Management Tools
+- **xano_get_table_schema**: Gets schema for a specific Xano table
+- **xano_add_field_to_schema**: Adds a new field to a table schema
+- **xano_rename_schema_field**: Renames a field in a table schema
+- **xano_delete_field**: Deletes a field from a table schema
+
+#### Record Management Tools
+- **xano_browse_table_content**: Browses content for a specific Xano table
+- **xano_get_table_record**: Gets a specific record from a table
+- **xano_search_table_content**: Searches table content using complex filtering
+
+All tools follow consistent patterns for authentication, error handling, and parameter validation using Zod.
 
 ### Key Insights and Lessons Learned
 
@@ -98,7 +134,7 @@ For detailed information on how the OAuth implementation works, check out the [O
    ```bash
    git clone https://github.com/roboulos/cloudflare-mcp-server.git
    cd cloudflare-mcp-server
-   git checkout oauth-provider
+   git checkout xano-tools-expansion
    ```
 
 2. Install dependencies:
@@ -156,7 +192,7 @@ For detailed information on how the OAuth implementation works, check out the [O
 
 ## Key Files
 
-- `src/index.ts`: Main entry point with OAuthProvider and MCP agent setup
+- `src/index.ts`: Main entry point with OAuthProvider, MCP agent setup, and expanded Xano tools
 - `src/xano-handler.ts`: Handler for OAuth flow and authentication logic
 - `src/utils.ts`: Utility functions for API requests and token management
 - `wrangler.toml`: Worker configuration with KV and environment settings
@@ -180,6 +216,7 @@ The implementation uses Cloudflare's OAuthProvider pattern for authentication pe
    - Implements Xano API tools with authentication checks
    - Uses stored authentication data for API operations
    - Enforces authentication requirements for protected operations
+   - Includes extensive set of Xano API tools for database management
 
 4. **Utilities** (utils.ts)
    - Handles token extraction and validation
@@ -203,6 +240,50 @@ To add new tools with persistent authentication:
 2. Check authentication with `this.props?.authenticated`
 3. Use the stored API key with `this.props.apiKey` for Xano API calls
 4. Add any additional authentication requirements as needed
+
+## Expanded Xano Tools Usage
+
+This implementation provides 16 expanded Xano API tools for comprehensive database management. Here are examples of how to use some of the most common tools:
+
+1. **Table Management**:
+   ```
+   // List all instances
+   xano_list_instances()
+   
+   // List all tables in a workspace
+   xano_list_tables("xnwv-v1z6-dvnr", 5)
+   
+   // Create a new table
+   xano_create_table("xnwv-v1z6-dvnr", 5, "Users", description="User profiles")
+   ```
+
+2. **Schema Management**:
+   ```
+   // Get a table's schema
+   xano_get_table_schema("xnwv-v1z6-dvnr", 5, 10)
+   
+   // Add a field to a table
+   xano_add_field_to_schema("xnwv-v1z6-dvnr", 5, 10, "email", "text", required=true)
+   
+   // Delete a field
+   xano_delete_field("xnwv-v1z6-dvnr", 5, 10, "old_field")
+   ```
+
+3. **Record Management**:
+   ```
+   // Browse table records
+   xano_browse_table_content("xnwv-v1z6-dvnr", 5, 10, page=1, per_page=50)
+   
+   // Get a specific record
+   xano_get_table_record("xnwv-v1z6-dvnr", 5, 10, 100)
+   
+   // Search for specific records
+   xano_search_table_content(
+     "xnwv-v1z6-dvnr", 5, 10,
+     search_conditions=[{"field": "status", "operator": "equals", "value": "active"}],
+     sort={"created_at": "desc"}
+   )
+   ```
 
 ## Implementation Approach: Solving Key OAuth Challenges
 
@@ -325,17 +406,24 @@ This implementation has been verified to work with:
 
 Now that we have a working implementation, here are possible future enhancements:
 
-1. **UI Improvements**:
+1. **Additional Xano Tools**:
+   - File management operations (list, delete, upload)
+   - API group management (create, list, update)
+   - API endpoint tools (create, list, update)
+   - Advanced index operations (btree, unique, search)
+   - Bulk record operations (create, update, delete)
+
+2. **UI Improvements**:
    - Better error messaging in the login form
    - Enhanced styling for the approval dialog
    - Mobile-responsive improvements
 
-2. **Security Enhancements**:
+3. **Security Enhancements**:
    - More robust validation of tokens and credentials
    - CSRF protection for the login form
    - Rate limiting for authentication attempts
 
-3. **Additional Features**:
+4. **Additional Features**:
    - Explicit logout functionality
    - User profile access in the MCP tools
    - More sophisticated cookie management for approvals

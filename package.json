@@ -13,6 +13,7 @@
     "agents": "^0.0.80",
     "hono": "^4.2.7",
     "mcp-remote": "^0.1.5",
+    "task-master-ai": "github:eyaltoledano/claude-task-master",
     "zod": "^3.24.4"
   },
   "devDependencies": {
