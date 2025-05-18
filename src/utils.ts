@@ -138,9 +138,31 @@ export async function makeApiRequest(url: string, token: string, method = "GET",
     
     const response = await fetch(url, options);
     
+    // Log the response status for debugging
+    console.log(`API Response status for ${url}: ${response.status} ${response.statusText}`);
+    
     // Handle 204 No Content responses (common for DELETE operations)
     if (response.status === 204) {
       return { success: true, message: "Operation completed successfully" };
+    }
+    
+    // Handle success status codes for bulk operations that may not return content
+    // Bulk create/update often returns 200 or 201 with empty body
+    if (response.ok && url.includes('/bulk')) {
+      // Try to read the text first to see if we actually got a response
+      const text = await response.text();
+      if (!text || text.trim() === '') {
+        console.log("Received OK response with empty body for bulk operation");
+        return { success: true, message: "Bulk operation completed successfully" };
+      }
+      
+      // If we got text, try to parse it as JSON
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.log("Received OK response with non-JSON text for bulk operation:", text);
+        return { success: true, message: "Bulk operation completed successfully", rawResponse: text };
+      }
     }
     
     // If not a JSON response, handle differently

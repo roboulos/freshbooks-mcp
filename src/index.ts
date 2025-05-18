@@ -411,6 +411,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
       },
+      {
+        annotations: {
+          title: "Get Table Schema",
+          readOnlyHint: true,     // This is just reading data
+          destructiveHint: false, // No destructive changes
+          idempotentHint: true,   // Same request always returns same result
+          openWorldHint: true     // Interacts with external Xano API
+        }
+      },
       async ({ instance_name, workspace_id, table_id }) => {
         // Check authentication
         if (!this.props?.authenticated) {
@@ -435,22 +444,45 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error getting table schema: ${result.error}`,
+                    code: result.code || "SCHEMA_ERROR"
+                  },
+                  operation: "xano_get_table_schema"
+                })
+              }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({ schema: result })
+              text: JSON.stringify({
+                success: true,
+                data: { schema: result },
+                operation: "xano_get_table_schema"
+              })
             }]
           };
         } catch (error) {
           console.error(`Error getting table schema: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error getting table schema: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error getting table schema: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_get_table_schema"
+              })
             }]
           };
         }
@@ -603,6 +635,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table to delete")
       },
+      {
+        annotations: {
+          title: "Delete Table",
+          readOnlyHint: false,    // This modifies data
+          destructiveHint: true,  // This is a destructive operation
+          idempotentHint: true,   // Deleting an already deleted table has no effect
+          openWorldHint: true     // Interacts with external Xano API
+        }
+      },
       async ({ instance_name, workspace_id, table_id }) => {
         // Check authentication
         if (!this.props?.authenticated) {
@@ -632,7 +673,18 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           // First check if result exists and has an error property
           if (result && result.error) {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error deleting table: ${result.error}`,
+                    code: result.code || "DELETE_TABLE_ERROR"
+                  },
+                  operation: "xano_delete_table"
+                })
+              }]
             };
           }
           
@@ -640,15 +692,27 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({ success: true, message: "Table deleted successfully" })
+              text: JSON.stringify({
+                success: true,
+                message: "Table deleted successfully",
+                operation: "xano_delete_table"
+              })
             }]
           };
         } catch (error) {
           console.error(`Error deleting table: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error deleting table: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error deleting table: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_delete_table"
+              })
             }]
           };
         }
@@ -672,6 +736,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         sensitive: z.boolean().optional().describe("Whether the field contains sensitive data"),
         style: z.string().optional().describe("Field style (\"single\" or \"list\")"),
         validators: z.record(z.any()).optional().describe("Validation rules specific to the field type")
+      },
+      {
+        annotations: {
+          title: "Add Field to Schema",
+          readOnlyHint: false,    // This changes the database
+          destructiveHint: false, // Not destructive, just additive
+          idempotentHint: false,  // Adding the same field twice would error
+          openWorldHint: true     // Interacts with external Xano API
+        }
       },
       async ({ 
         instance_name, workspace_id, table_id, field_name, field_type,
@@ -705,7 +778,18 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           if (schemaResult.error) {
             return {
-              content: [{ type: "text", text: `Error getting table schema: ${schemaResult.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error getting table schema: ${schemaResult.error}`,
+                    code: schemaResult.code || "SCHEMA_ERROR"
+                  },
+                  operation: "xano_add_field_to_schema"
+                })
+              }]
             };
           }
           
@@ -750,22 +834,45 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           if (result && result.error) {
             return {
-              content: [{ type: "text", text: `Error updating schema: ${result.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error updating schema: ${result.error}`,
+                    code: result.code || "SCHEMA_UPDATE_ERROR"
+                  },
+                  operation: "xano_add_field_to_schema"
+                })
+              }]
             };
           }
           
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result || { success: true, message: "Field added successfully" })
+              text: JSON.stringify({
+                success: true,
+                data: result || { message: "Field added successfully" },
+                operation: "xano_add_field_to_schema"
+              })
             }]
           };
         } catch (error) {
           console.error(`Error adding field to schema: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error adding field to schema: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error adding field to schema: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_add_field_to_schema"
+              })
             }]
           };
         }
@@ -781,6 +888,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         old_name: z.string().describe("The current name of the field"),
         new_name: z.string().describe("The new name for the field")
+      },
+      {
+        annotations: {
+          title: "Rename Schema Field",
+          readOnlyHint: false,    // This modifies the schema
+          destructiveHint: false, // Not destructive, just a rename
+          idempotentHint: false,  // Renaming to the same name twice would error
+          openWorldHint: true     // Interacts with external Xano API
+        }
       },
       async ({ instance_name, workspace_id, table_id, old_name, new_name }) => {
         // Check authentication
@@ -801,32 +917,56 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema/${old_name}/rename`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema/rename`;
           
           const data = {
+            old_name: old_name,
             new_name: new_name
           };
           
-          const result = await makeApiRequest(url, token, "PUT", data);
+          const result = await makeApiRequest(url, token, "POST", data);
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error renaming schema field: ${result.error}`,
+                    code: result.code || "RENAME_FIELD_ERROR"
+                  },
+                  operation: "xano_rename_schema_field"
+                })
+              }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify({
+                success: true,
+                data: result || { message: "Field renamed successfully" },
+                operation: "xano_rename_schema_field"
+              })
             }]
           };
         } catch (error) {
           console.error(`Error renaming schema field: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error renaming schema field: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error renaming schema field: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_rename_schema_field"
+              })
             }]
           };
         }
@@ -864,17 +1004,48 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema/${field_name}`;
           
           const result = await makeApiRequest(url, token, "DELETE");
-
-          if (result.error) {
+          
+          // Handle successful DELETE operations (which may return null)
+          if (result === null || (typeof result === 'object' && Object.keys(result).length === 0)) {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  message: "Field deleted successfully",
+                  operation: "xano_delete_field"
+                })
+              }]
             };
           }
 
+          // Handle explicit error
+          if (result && result.error) {
+            return {
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error deleting field: ${result.error}`,
+                    code: result.code || "DELETE_FIELD_ERROR"
+                  },
+                  operation: "xano_delete_field"
+                })
+              }]
+            };
+          }
+
+          // Return the result if we got something but not an error
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify({
+                success: true,
+                data: result,
+                operation: "xano_delete_field"
+              })
             }]
           };
         } catch (error) {
@@ -1018,6 +1189,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         record_data: z.record(z.any()).describe("The data for the new record")
       },
+      {
+        annotations: {
+          title: "Create Table Record",
+          readOnlyHint: false,    // This modifies data
+          destructiveHint: false, // Creates but doesn't destroy anything
+          idempotentHint: false,  // Creating the same record twice has different results
+          openWorldHint: true     // Interacts with external Xano API
+        }
+      },
       async ({ instance_name, workspace_id, table_id, record_data }) => {
         // Check authentication
         if (!this.props?.authenticated) {
@@ -1042,22 +1222,45 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error creating table record: ${result.error}`,
+                    code: result.code || "CREATE_RECORD_ERROR"
+                  },
+                  operation: "xano_create_table_record"
+                })
+              }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify({
+                success: true,
+                data: result,
+                operation: "xano_create_table_record"
+              })
             }]
           };
         } catch (error) {
           console.error(`Error creating table record: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error creating table record: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error creating table record: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_create_table_record"
+              })
             }]
           };
         }
@@ -1189,6 +1392,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         records: z.array(z.record(z.any())).describe("List of record data to insert"),
         allow_id_field: z.boolean().optional().describe("Whether to allow setting the ID field")
       },
+      {
+        annotations: {
+          title: "Bulk Create Records",
+          readOnlyHint: false,    // This modifies data
+          destructiveHint: false, // Creates but doesn't destroy
+          idempotentHint: false,  // Creates new records each time
+          openWorldHint: true     // Interacts with external Xano API
+        }
+      },
       async ({ instance_name, workspace_id, table_id, records, allow_id_field }) => {
         // Check authentication
         if (!this.props?.authenticated) {
@@ -1211,30 +1423,116 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/bulk`;
           
           const data = {
-            records,
+            items: records,
             allow_id_field: allow_id_field || false
           };
           
           const result = await makeApiRequest(url, token, "POST", data);
+          console.log("Bulk create response:", JSON.stringify(result));
 
-          if (result.error) {
+          // Handle Xano's specific bulk operation response format
+          // which returns: { error: [], success: [ids], success_total: n }
+          if (result && 'success_total' in result) {
+            // This is Xano's standard bulk operation success response
+            // Check if there are any errors in the error array
+            if (Array.isArray(result.error) && result.error.length > 0) {
+              // There were some errors in the batch operation
+              return {
+                isError: true,
+                content: [{ 
+                  type: "text", 
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Partial bulk creation failure: ${result.error.length} records failed`,
+                      code: "PARTIAL_CREATE_FAILURE",
+                      details: {
+                        failed: result.error,
+                        succeeded: result.success,
+                        success_count: result.success_total
+                      }
+                    },
+                    operation: "xano_bulk_create_records"
+                  })
+                }]
+              };
+            } else {
+              // Complete success - all records created
+              return {
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Successfully created ${result.success_total} records`,
+                    data: {
+                      created_records: result.success,
+                      created_count: result.success_total
+                    },
+                    operation: "xano_bulk_create_records"
+                  })
+                }]
+              };
+            }
+          } 
+          // Handle standard error
+          else if (result && result.error && typeof result.error === 'string') {
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error in bulk creation: ${result.error}`,
+                    code: result.code || "BULK_CREATE_ERROR"
+                  },
+                  operation: "xano_bulk_create_records"
+                })
+              }]
             };
           }
-
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(result)
-            }]
+          // Handle null or empty response
+          else if (result === null || (typeof result === 'object' && Object.keys(result).length === 0)) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  message: "Records created successfully",
+                  affected_count: records.length,
+                  operation: "xano_bulk_create_records"
+                })
+              }]
+            };
+          }
+          // Any other response format
+          else {
+            // Default - just return the data
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_bulk_create_records"
+                })
+              }]
+            };
           };
         } catch (error) {
           console.error(`Error bulk creating records: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error bulk creating records: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error bulk creating records: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_bulk_create_records"
+              })
             }]
           };
         }
@@ -1249,9 +1547,18 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         updates: z.array(z.object({
-          row_id: z.union([z.string(), z.number()]),
-          updates: z.record(z.any())
-        })).describe("List of update operations, each containing row_id and updates")
+          row_id: z.union([z.string(), z.number()]).describe("ID of the record to update"),
+          updates: z.record(z.any()).describe("Object containing the fields to update and their new values")
+        })).describe("List of update operations, each containing row_id and a nested updates object with fields to change")
+      },
+      {
+        annotations: {
+          title: "Bulk Update Records",
+          readOnlyHint: false,    // This modifies data
+          destructiveHint: false, // Updates but doesn't destroy
+          idempotentHint: true,   // Same updates applied twice have same effect
+          openWorldHint: true     // Interacts with external Xano API
+        }
       },
       async ({ instance_name, workspace_id, table_id, updates }) => {
         // Check authentication
@@ -1272,28 +1579,147 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/bulk`;
+          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/bulk/patch`;
           
-          const result = await makeApiRequest(url, token, "PUT", { updates });
-
-          if (result.error) {
+          // Format row_ids in updates to ensure they're strings
+          // AND make sure each update has exactly row_id and updates fields
+          const formattedUpdates = updates.map(update => {
+            // Check if update already has the correct structure
+            if (update.row_id && update.updates && Object.keys(update).length === 2) {
+              return {
+                row_id: formatId(update.row_id),
+                updates: update.updates
+              };
+            }
+            
+            // If not properly structured, try to extract correctly
+            const { row_id, ...otherFields } = update;
+            
+            if (!row_id) {
+              console.error("Missing row_id in update:", update);
+              throw new Error("Missing row_id in update");
+            }
+            
             return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
+              row_id: formatId(row_id),
+              updates: update.updates || otherFields // Use updates field if it exists, otherwise use all other fields
+            };
+          });
+          
+          const data = {
+            items: formattedUpdates
+          };
+          
+          // Log the request data for debugging
+          console.log("Bulk update request URL:", url);
+          console.log("Bulk update request data:", JSON.stringify(data));
+          
+          const result = await makeApiRequest(url, token, "POST", data);
+          console.log("Bulk update response:", JSON.stringify(result));
+
+          // Handle Xano's specific bulk update response format
+          // which returns: { error: [], success: [ids], success_total: n }
+          if (result && 'success_total' in result) {
+            // This is Xano's standard bulk operation success response
+            // Check if there are any errors in the error array
+            if (Array.isArray(result.error) && result.error.length > 0) {
+              // There were some errors in the batch operation
+              return {
+                isError: true,
+                content: [{ 
+                  type: "text", 
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Partial bulk update failure: ${result.error.length} records failed`,
+                      code: "PARTIAL_UPDATE_FAILURE",
+                      details: {
+                        failed: result.error,
+                        succeeded: result.success,
+                        success_count: result.success_total
+                      }
+                    },
+                    operation: "xano_bulk_update_records"
+                  })
+                }]
+              };
+            } else {
+              // Complete success - all records updated
+              return {
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Successfully updated ${result.success_total} records`,
+                    data: {
+                      updated_records: result.success,
+                      update_count: result.success_total
+                    },
+                    operation: "xano_bulk_update_records"
+                  })
+                }]
+              };
+            }
+          } 
+          // Handle null or empty response
+          else if (result === null || (typeof result === 'object' && Object.keys(result).length === 0)) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  message: "Records updated successfully",
+                  affected_count: updates.length,
+                  operation: "xano_bulk_update_records"
+                })
+              }]
+            };
+          } 
+          // Handle explicit error
+          else if (result && result.error && typeof result.error === 'string') {
+            return {
+              isError: true,
+              content: [{ 
+                type: "text", 
+                text: JSON.stringify({
+                  success: false,
+                  error: {
+                    message: `Error in bulk update: ${result.error}`,
+                    code: result.code || "BULK_UPDATE_ERROR"
+                  },
+                  operation: "xano_bulk_update_records"
+                })
+              }]
+            };
+          } 
+          // Any other response format
+          else {
+            // Default - just return the data
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_bulk_update_records"
+                })
+              }]
             };
           }
-
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(result)
-            }]
-          };
         } catch (error) {
           console.error(`Error bulk updating records: ${error.message}`);
           return {
+            isError: true,
             content: [{
               type: "text",
-              text: `Error bulk updating records: ${error.message}`
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  message: `Error bulk updating records: ${error.message}`,
+                  code: "EXCEPTION"
+                },
+                operation: "xano_bulk_update_records"
+              })
             }]
           };
         }
