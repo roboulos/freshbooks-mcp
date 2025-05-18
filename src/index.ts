@@ -623,18 +623,24 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}`;
+          
+          console.log(`Deleting table ${table_id} from workspace ${workspace_id}`);
+          
           const result = await makeApiRequest(url, token, "DELETE");
 
-          if (result.error) {
+          // Null or empty response is common for successful DELETE operations
+          // First check if result exists and has an error property
+          if (result && result.error) {
             return {
               content: [{ type: "text", text: `Error: ${result.error}` }]
             };
           }
-
+          
+          // If we reach here, the deletion was likely successful
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify({ success: true, message: "Table deleted successfully" })
             }]
           };
         } catch (error) {
@@ -722,17 +728,45 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             newField["validators"] = validators;
           }
           
-          // Get current schema and ensure primary key is first
+          // Get current schema 
           const currentSchema = currentSchemaResult.schema || [];
           
-          // Find the id field (primary key) and other fields
-          const idField = currentSchema.find(field => field.name === "id");
-          const otherFields = currentSchema.filter(field => field.name !== "id");
+          console.log("Current schema:", JSON.stringify(currentSchema, null, 2));
           
-          // Create updated schema with primary key first, then existing fields, then new field
-          const updatedSchema = idField 
-            ? [idField, ...otherFields, newField]
-            : [...currentSchema, newField];
+          // Carefully handle the schema to ensure primary key remains first
+          // and all existing field structure is preserved
+          
+          // First, let's examine the schema closely
+          if (currentSchema.length === 0) {
+            console.error("Schema appears to be empty, which is unexpected");
+            return {
+              content: [{ type: "text", text: "Error: Cannot modify empty schema" }]
+            };
+          }
+          
+          // Find primary key field and verify it's first
+          const firstField = currentSchema[0];
+          if (firstField.name !== "id") {
+            console.error("Primary key is not the first field in schema", firstField);
+            return {
+              content: [{ type: "text", text: "Error: Schema structure is invalid - primary key should be first" }]
+            };
+          }
+          
+          // Create a new schema array with primary key first, then all other existing fields, then new field
+          const updatedSchema = [
+            currentSchema[0], // Primary key (id) field
+            ...currentSchema.slice(1),  // All other existing fields
+            newField           // The new field we're adding
+          ];
+          
+          // Double-check that primary key is still first
+          if (updatedSchema[0].name !== "id") {
+            console.error("Error: Primary key not preserved as first field");
+            return {
+              content: [{ type: "text", text: "Error: Failed to maintain schema structure" }]
+            };
+          }
           
           // Prepare data for updating schema
           const data = { schema: updatedSchema };
