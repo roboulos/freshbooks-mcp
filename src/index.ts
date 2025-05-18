@@ -907,71 +907,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // Search table content
-    this.server.tool(
-      "xano_search_table_content",
-      {
-        instance_name: z.string().describe("The name of the Xano instance"),
-        workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
-        table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
-        search_conditions: z.array(z.record(z.any())).optional().describe("List of search conditions"),
-        sort: z.record(z.string()).optional().describe("Dictionary with field names as keys and \"asc\" or \"desc\" as values"),
-        page: z.number().optional().describe("Page number (default: 1)"),
-        per_page: z.number().optional().describe("Number of records per page (default: 50)")
-      },
-      async ({ instance_name, workspace_id, table_id, search_conditions, sort, page, per_page }) => {
-        // Check authentication
-        if (!this.props?.authenticated) {
-          return {
-            content: [{ type: "text", text: "Authentication required to use this tool." }]
-          };
-        }
-
-        // Use API key from props
-        const token = this.props.apiKey;
-
-        if (!token) {
-          return {
-            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
-          };
-        }
-
-        try {
-          const metaApi = getMetaApiUrl(instance_name);
-          const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/search`;
-          
-          const data = {
-            search: search_conditions || [],
-            sort: sort || {},
-            page: page || 1,
-            per_page: per_page || 50
-          };
-          
-          const result = await makeApiRequest(url, token, "POST", data);
-
-          if (result.error) {
-            return {
-              content: [{ type: "text", text: `Error: ${result.error}` }]
-            };
-          }
-
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(result)
-            }]
-          };
-        } catch (error) {
-          console.error(`Error searching table content: ${error.message}`);
-          return {
-            content: [{
-              type: "text",
-              text: `Error searching table content: ${error.message}`
-            }]
-          };
-        }
-      }
-    );
+    // Search table content tool removed - causing Claude to crash
 
     // Get table record
     this.server.tool(
