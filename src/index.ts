@@ -566,9 +566,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           if (auth !== undefined) data.auth = auth;
           if (tag !== undefined) data.tag = tag;
           
+          console.log("Updating table with:", JSON.stringify(data, null, 2));
+          
           const result = await makeApiRequest(url, token, "PUT", data);
 
-          if (result.error) {
+          // Handle response including null/empty responses
+          if (result && result.error) {
             return {
               content: [{ type: "text", text: `Error: ${result.error}` }]
             };
@@ -577,7 +580,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify(result || { success: true, message: "Table updated successfully" })
             }]
           };
         } catch (error) {
@@ -689,11 +692,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           const schemaUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema`;
           
           // First get the current schema
-          const currentSchema = await makeApiRequest(schemaUrl, token);
+          const currentSchemaResult = await makeApiRequest(schemaUrl, token);
           
-          if (currentSchema.error) {
+          if (currentSchemaResult.error) {
             return {
-              content: [{ type: "text", text: `Error getting current schema: ${currentSchema.error}` }]
+              content: [{ type: "text", text: `Error getting current schema: ${currentSchemaResult.error}` }]
             };
           }
           
@@ -702,7 +705,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             name: field_name,
             type: field_type,
             description: description || "",
-            nullable: nullable !== undefined ? nullable : false,
+            nullable: nullable !== undefined ? nullable : true,
             required: required !== undefined ? required : false,
             access: access || "public",
             sensitive: sensitive !== undefined ? sensitive : false,
@@ -719,12 +722,22 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             newField["validators"] = validators;
           }
           
-          // Add the new field to the schema
-          const updatedSchema = currentSchema.schema || [];
-          updatedSchema.push(newField);
+          // Get current schema and ensure primary key is first
+          const currentSchema = currentSchemaResult.schema || [];
+          
+          // Find the id field (primary key) and other fields
+          const idField = currentSchema.find(field => field.name === "id");
+          const otherFields = currentSchema.filter(field => field.name !== "id");
+          
+          // Create updated schema with primary key first, then existing fields, then new field
+          const updatedSchema = idField 
+            ? [idField, ...otherFields, newField]
+            : [...currentSchema, newField];
           
           // Prepare data for updating schema
           const data = { schema: updatedSchema };
+          
+          console.log("Updating schema with:", JSON.stringify(data, null, 2));
           
           // Update the schema
           const result = await makeApiRequest(schemaUrl, token, "PUT", data);
@@ -1130,9 +1143,13 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/${formatId(record_id)}`;
+          
+          console.log(`Deleting record: ${record_id} from table ${table_id}`);
+          
           const result = await makeApiRequest(url, token, "DELETE");
 
-          if (result.error) {
+          // Handle response including null/empty responses which are common for DELETE operations
+          if (result && result.error) {
             return {
               content: [{ type: "text", text: `Error: ${result.error}` }]
             };
@@ -1141,7 +1158,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify(result || { success: true, message: "Record deleted successfully" })
             }]
           };
         } catch (error) {

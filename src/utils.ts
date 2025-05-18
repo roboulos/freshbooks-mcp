@@ -138,11 +138,43 @@ export async function makeApiRequest(url: string, token: string, method = "GET",
     
     const response = await fetch(url, options);
     
-    if (!response.ok) {
-      return { error: `HTTP Error: ${response.status} ${response.statusText}` };
+    // Handle 204 No Content responses (common for DELETE operations)
+    if (response.status === 204) {
+      return { success: true, message: "Operation completed successfully" };
     }
     
-    return await response.json();
+    // If not a JSON response, handle differently
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      if (!response.ok) {
+        return { error: `HTTP Error: ${response.status} ${response.statusText}` };
+      }
+      return { success: true, message: "Operation completed successfully" };
+    }
+    
+    // For JSON responses
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { 
+        error: errorData.message || `HTTP Error: ${response.status} ${response.statusText}`,
+        code: errorData.code,
+        status: response.status
+      };
+    }
+    
+    // Handle empty responses that should be JSON
+    const text = await response.text();
+    if (!text) {
+      return { success: true, message: "Operation completed successfully" };
+    }
+    
+    // Parse JSON response
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Failed to parse JSON:", text);
+      return { success: true, rawResponse: text };
+    }
   } catch (error) {
     console.error(`API request error: ${error.message}`);
     return { error: error.message };
