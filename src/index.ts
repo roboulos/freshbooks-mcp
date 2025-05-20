@@ -4,6 +4,7 @@ import { z } from "zod";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { XanoHandler } from "./xano-handler";
 import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
+import { refreshUserProfile } from "./refresh-profile";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
@@ -14,6 +15,46 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     name: "Snappy MCP Server",
     version: "1.0.0",
   });
+  
+  // Override the onNewRequest method to refresh the profile before handling any tool requests
+  async onNewRequest(req: Request, env: Env): Promise<[Request, XanoAuthProps, unknown]> {
+    // First call the parent method to get the default props
+    const [request, props, ctx] = await super.onNewRequest(req, env);
+    
+    // If we're already authenticated, refresh the profile
+    if (props?.authenticated) {
+      console.log("Refreshing user profile before handling request...");
+      try {
+        // Call our refresh function
+        const refreshResult = await refreshUserProfile(env);
+        
+        if (refreshResult.success) {
+          console.log("Profile refreshed successfully, updating props with fresh API key");
+          // Update the props with the refreshed data
+          return [
+            request, 
+            { 
+              ...props,
+              apiKey: refreshResult.profile.apiKey,
+              userId: refreshResult.profile.userId,
+              name: refreshResult.profile.name,
+              email: refreshResult.profile.email
+            }, 
+            ctx
+          ];
+        } else {
+          console.error("Failed to refresh profile:", refreshResult.error);
+          // Continue with existing props if refresh failed
+        }
+      } catch (error) {
+        console.error("Error in profile refresh middleware:", error);
+        // Continue with existing props if there was an error
+      }
+    }
+    
+    // Return the original values if not authenticated or if refresh failed
+    return [request, props, ctx];
+  }
 
   async init() {
     // Debug tool to see what props are available
@@ -40,10 +81,67 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               userId: this.props?.userId,
               name: this.props?.name,
               email: this.props?.email,
-              authenticated: this.props?.authenticated
+              authenticated: this.props?.authenticated,
+              lastRefreshed: this.props?.lastRefreshed || "never"
             }, null, 2)
           }]
         };
+      }
+    );
+    
+    // Tool to manually trigger a profile refresh
+    // This tool is only for debugging purposes
+    this.server.tool(
+      "debug_refresh_profile",
+      {},
+      async () => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+        
+        try {
+          // Call the refresh function
+          const refreshResult = await refreshUserProfile(this.env);
+          
+          if (refreshResult.success) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  message: "Profile refreshed successfully",
+                  profile: {
+                    apiKeyPrefix: refreshResult.profile.apiKey.substring(0, 20) + "...",
+                    userId: refreshResult.profile.userId,
+                    name: refreshResult.profile.name,
+                    email: refreshResult.profile.email
+                  }
+                }, null, 2)
+              }]
+            };
+          } else {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: false,
+                  error: refreshResult.error
+                }, null, 2)
+              }]
+            };
+          }
+        } catch (error) {
+          console.error("Error refreshing profile:", error);
+          return {
+            content: [{
+              type: "text",
+              text: `Error refreshing profile: ${error.message || "Unknown error"}`
+            }]
+          };
+        }
       }
     );
 
