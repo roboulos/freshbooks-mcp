@@ -16,43 +16,41 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     version: "1.0.0",
   });
   
-  // Override the onNewRequest method to refresh the profile before handling any tool requests
+  // Override the onNewRequest method to handle requests with authentication refresh
   async onNewRequest(req: Request, env: Env): Promise<[Request, XanoAuthProps, unknown]> {
     // First call the parent method to get the default props
     const [request, props, ctx] = await super.onNewRequest(req, env);
     
-    // If we're already authenticated, refresh the profile
-    if (props?.authenticated) {
-      console.log("Refreshing user profile before handling request...");
-      try {
-        // Call our refresh function
-        const refreshResult = await refreshUserProfile(env);
-        
-        if (refreshResult.success) {
-          console.log("Profile refreshed successfully, updating props with fresh API key");
-          // Update the props with the refreshed data
-          return [
-            request, 
-            { 
-              ...props,
-              apiKey: refreshResult.profile.apiKey,
-              userId: refreshResult.profile.userId,
-              name: refreshResult.profile.name,
-              email: refreshResult.profile.email
-            }, 
-            ctx
-          ];
-        } else {
-          console.error("Failed to refresh profile:", refreshResult.error);
-          // Continue with existing props if refresh failed
-        }
-      } catch (error) {
-        console.error("Error in profile refresh middleware:", error);
-        // Continue with existing props if there was an error
-      }
+    // Log the props we receive to better understand what's available
+    console.log("PROPS IN ON_NEW_REQUEST:", {
+      authenticated: props?.authenticated,
+      hasAccessToken: !!props?.accessToken,
+      accessTokenLength: props?.accessToken ? props.accessToken.length : 0,
+      hasApiKey: !!props?.apiKey,
+      apiKeyLength: props?.apiKey ? props.apiKey.length : 0,
+      userId: props?.userId,
+      propKeys: props ? Object.keys(props) : []
+    });
+    
+    // Check if we have KV entries - for debugging
+    try {
+      const listResult = await env.OAUTH_KV.list();
+      console.log("KV LIST RESULT:", {
+        hasKeys: !!listResult.keys,
+        keyCount: listResult.keys ? listResult.keys.length : 0,
+        keyNames: listResult.keys ? listResult.keys.map(k => k.name) : []
+      });
+    } catch (e) {
+      console.error("Error listing KV:", e);
     }
     
-    // Return the original values if not authenticated or if refresh failed
+    // If we're already authenticated, simply use the props we have
+    if (props?.authenticated && props?.apiKey) {
+      console.log("Valid authentication found, proceeding with request");
+      return [request, props, ctx];
+    }
+    
+    // Not authenticated or missing apiKey - return as is
     return [request, props, ctx];
   }
 
@@ -139,6 +137,66 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: `Error refreshing profile: ${error.message || "Unknown error"}`
+            }]
+          };
+        }
+      }
+    );
+    
+    // Tool to examine the KV storage
+    this.server.tool(
+      "debug_kv_storage",
+      {},
+      async () => {
+        try {
+          // Check authentication
+          if (!this.props?.authenticated) {
+            return {
+              content: [{ type: "text", text: "Authentication required to use this tool." }]
+            };
+          }
+          
+          // List all entries in KV storage
+          const listResult = await this.env.OAUTH_KV.list();
+          
+          // Format results
+          const keys = listResult.keys || [];
+          const keyDetails = [];
+          
+          for (const key of keys) {
+            const value = await this.env.OAUTH_KV.get(key.name);
+            let parsedValue;
+            
+            try {
+              parsedValue = JSON.parse(value);
+            } catch (e) {
+              parsedValue = { error: "Not valid JSON", length: value ? value.length : 0 };
+            }
+            
+            keyDetails.push({
+              name: key.name,
+              expiration: key.expiration,
+              metadata: key.metadata,
+              value: parsedValue
+            });
+          }
+          
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                keyCount: keys.length,
+                keys: keyDetails,
+                propsAccessToken: this.props?.accessToken ? this.props.accessToken.substring(0, 10) + "..." : null
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          console.error("Error examining KV storage:", error);
+          return {
+            content: [{
+              type: "text",
+              text: `Error examining KV storage: ${error.message || "Unknown error"}`
             }]
           };
         }

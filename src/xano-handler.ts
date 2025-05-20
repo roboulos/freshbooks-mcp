@@ -197,6 +197,23 @@ app.get("/callback", async (c) => {
             userIdFromResponse: userData.id
         });
 
+        // Store the token explicitly in KV storage for our refresh mechanism
+        await c.env.OAUTH_KV.put(
+            `xano_auth_token:${userId}`,
+            JSON.stringify({
+                authToken: token,
+                apiKey: apiKey,
+                userId: userId,
+                name: name,
+                email: email,
+                authenticated: true,
+                lastUpdated: new Date().toISOString()
+            }),
+            { expirationTtl: 604800 } // 7 days
+        );
+        
+        console.log(`Explicitly stored auth token in KV for user ${userId}`);
+        
         // Complete authorization exactly like GitHub example
         const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
             request: oauthReqInfo,

@@ -70,18 +70,29 @@ export async function fetchXanoUserInfo({
   }
 
   try {
-    const response = await fetch(`${base_url}/api:e6emygx3/auth/me`, {
+    const url = `${base_url}/api:e6emygx3/auth/me`;
+    console.log(`Calling auth/me at: ${url} with token prefix: ${token.substring(0, 10)}...`);
+    
+    const response = await fetch(url, {
       headers: {
         "Authorization": `Bearer ${token}`,
       },
     });
     
     if (!response.ok) {
-      console.error("Failed to fetch user info");
+      console.error(`Failed to fetch user info: ${response.status} ${response.statusText}`);
+      let errorText = "";
+      try {
+        errorText = await response.text();
+        console.error(`Error response body: ${errorText}`);
+      } catch (e) {
+        console.error("Could not read error response body");
+      }
       return [null, new Response("Failed to fetch user info", { status: response.status })];
     }
     
     const userData = await response.json();
+    console.log("Successfully fetched user info with keys:", Object.keys(userData));
     return [userData, null];
   } catch (error) {
     console.error("Error fetching user info:", error);

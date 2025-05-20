@@ -15,37 +15,87 @@ export async function refreshUserProfile(env: any) {
       return { success: false, error: "KV storage not available" };
     }
 
-    // List all token entries in KV storage
-    const listResult = await OAUTH_KV.list({ prefix: 'token:' });
-    if (!listResult.keys || listResult.keys.length === 0) {
-      console.error("No authentication tokens found for profile refresh");
-      return { success: false, error: "No authentication tokens found" };
-    }
-
-    // Get the latest token entry
-    const tokenKey = listResult.keys[0].name;
-    const authDataStr = await OAUTH_KV.get(tokenKey);
+    // Try to find our explicitly stored auth token entry
+    let authToken = null;
+    let authData = null;
+    let storageKey = null;  // Track which key we found the token in
     
-    if (!authDataStr) {
-      console.error(`Token data not found for key: ${tokenKey}`);
-      return { success: false, error: "Token data not found" };
+    try {
+      // Look for xano_auth_token entries
+      const authEntries = await OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+      
+      if (authEntries.keys && authEntries.keys.length > 0) {
+        console.log(`Found ${authEntries.keys.length} explicit auth token entries`);
+        // Use the first auth token entry
+        storageKey = authEntries.keys[0].name;
+        const authDataStr = await OAUTH_KV.get(storageKey);
+        
+        if (authDataStr) {
+          authData = JSON.parse(authDataStr);
+          const userId = authData.userId;
+          authToken = authData.authToken;
+          
+          if (authToken) {
+            console.log(`Found stored auth token for user ${userId} in key ${storageKey}`);
+          } else {
+            console.error("Auth token entry found but token is missing");
+            return { success: false, error: "Auth token not found in stored data" };
+          }
+        } else {
+          console.error(`Auth data not found for key: ${storageKey}`);
+          return { success: false, error: "Auth data not found" };
+        }
+      } else {
+        // Fall back to looking for token: entries
+        console.log("No explicit auth token entries found, trying legacy format");
+        const listResult = await OAUTH_KV.list({ prefix: 'token:' });
+        
+        if (!listResult.keys || listResult.keys.length === 0) {
+          console.error("No authentication tokens found for profile refresh");
+          return { success: false, error: "No authentication tokens found" };
+        }
+        
+        // Get the latest token entry
+        storageKey = listResult.keys[0].name;
+        
+        // Get the stored data for this token
+        const authDataStr = await OAUTH_KV.get(storageKey);
+        
+        if (!authDataStr) {
+          console.error(`Token data not found for key: ${storageKey}`);
+          return { success: false, error: "Token data not found" };
+        }
+        
+        // Parse the authentication data
+        authData = JSON.parse(authDataStr);
+        
+        // Extract the authToken (stored as accessToken in props)
+        authToken = authData.accessToken;
+        
+        if (!authToken) {
+          console.error("No auth token found in stored authentication data");
+          return { success: false, error: "No auth token found" };
+        }
+      }
+    } catch (error) {
+      console.error("Error finding auth token:", error);
+      return { success: false, error: `Error finding auth token: ${error.message}` };
     }
-
-    // Parse the authentication data
-    const authData = JSON.parse(authDataStr);
-    const accessToken = authData.accessToken;
     
-    if (!accessToken) {
-      console.error("No access token found in stored authentication data");
-      return { success: false, error: "No access token found" };
+    if (!authToken) {
+      return { success: false, error: "Auth token not found after all attempts" };
     }
-
-    console.log("Refreshing user profile with access token...");
     
-    // Call auth/me with the access token to get the fresh user data
+    console.log("Found auth token for refreshing user profile:", {
+      authTokenPrefix: authToken.substring(0, 5) + '...',
+      tokenLength: authToken.length,
+      baseUrl
+    });
+    
+    // Call auth/me with the auth token to get the fresh user data
     const [userData, errorResponse] = await fetchXanoUserInfo({
       base_url: baseUrl,
-      token: accessToken,
+      token: authToken,
     });
 
     if (errorResponse || !userData) {
@@ -79,7 +129,13 @@ export async function refreshUserProfile(env: any) {
       lastRefreshed: new Date().toISOString(),
     };
 
-    await OAUTH_KV.put(tokenKey, JSON.stringify(updatedAuthData));
+    // If this is an xano_auth_token entry, make sure we preserve the authToken field
+    if (storageKey && storageKey.startsWith('xano_auth_token:')) {
+      updatedAuthData.authToken = authToken;
+    }
+
+    console.log(`Updating auth data in storage key: ${storageKey}`);
+    await OAUTH_KV.put(storageKey, JSON.stringify(updatedAuthData));
 
     // Also update any refresh tokens for the same user
     const refreshTokensResult = await OAUTH_KV.list({ prefix: 'refresh:' });
