@@ -81,6 +81,47 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return [request, props, ctx];
   }
 
+  async getFreshApiKey(): Promise<string | null> {
+    if (!this.props?.authenticated || !this.props?.userId) {
+      return this.props?.apiKey || null;
+    }
+
+    try {
+      // Look for the latest auth data in KV storage
+      const authEntries = await this.env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+      
+      if (authEntries.keys && authEntries.keys.length > 0) {
+        const authDataStr = await this.env.OAUTH_KV.get(authEntries.keys[0].name);
+        if (authDataStr) {
+          const authData = JSON.parse(authDataStr);
+          if (authData.userId === this.props.userId && authData.apiKey) {
+            console.log("Using fresh API key from KV storage");
+            return authData.apiKey;
+          }
+        }
+      }
+      
+      // Fallback: try token: prefix entries
+      const tokenEntries = await this.env.OAUTH_KV.list({ prefix: 'token:' });
+      for (const key of tokenEntries.keys || []) {
+        const tokenDataStr = await this.env.OAUTH_KV.get(key.name);
+        if (tokenDataStr) {
+          const tokenData = JSON.parse(tokenDataStr);
+          if (tokenData.userId === this.props.userId && tokenData.apiKey) {
+            console.log("Using fresh API key from token KV storage");
+            return tokenData.apiKey;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching fresh API key:", error);
+    }
+    
+    // Fallback to cached props if KV lookup fails
+    console.log("Falling back to cached API key from props");
+    return this.props?.apiKey || null;
+  }
+
   async init() {
     // Debug tool to see what props are available
     this.server.tool(
@@ -290,8 +331,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -385,8 +426,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -438,8 +479,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -491,8 +532,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -548,8 +589,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -611,8 +652,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -692,8 +733,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -760,8 +801,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -835,8 +876,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -940,8 +981,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1089,8 +1130,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1173,8 +1214,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1261,8 +1302,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1325,8 +1366,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1389,8 +1430,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1468,8 +1509,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1523,8 +1564,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1592,8 +1633,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
@@ -1751,8 +1792,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
 
-        // Use API key from props
-        const token = this.props.apiKey;
+        // Use fresh API key from KV storage
+        const token = await this.getFreshApiKey();
 
         if (!token) {
           return {
