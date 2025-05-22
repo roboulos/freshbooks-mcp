@@ -32,25 +32,52 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       propKeys: props ? Object.keys(props) : []
     });
     
-    // Check if we have KV entries - for debugging
-    try {
-      const listResult = await env.OAUTH_KV.list();
-      console.log("KV LIST RESULT:", {
-        hasKeys: !!listResult.keys,
-        keyCount: listResult.keys ? listResult.keys.length : 0,
-        keyNames: listResult.keys ? listResult.keys.map(k => k.name) : []
-      });
-    } catch (e) {
-      console.error("Error listing KV:", e);
+    // If we're authenticated, check KV for the latest API key
+    if (props?.authenticated && props?.userId) {
+      try {
+        // Look for the latest auth data in KV storage
+        const authEntries = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+        
+        if (authEntries.keys && authEntries.keys.length > 0) {
+          const authDataStr = await env.OAUTH_KV.get(authEntries.keys[0].name);
+          if (authDataStr) {
+            const authData = JSON.parse(authDataStr);
+            if (authData.userId === props.userId && authData.apiKey) {
+              // Update props with fresh API key from KV
+              const freshProps = {
+                ...props,
+                apiKey: authData.apiKey,
+                lastRefreshed: authData.lastRefreshed
+              };
+              console.log("Updated props with fresh API key from KV");
+              return [request, freshProps, ctx];
+            }
+          }
+        }
+        
+        // Fallback: try token: prefix entries
+        const tokenEntries = await env.OAUTH_KV.list({ prefix: 'token:' });
+        for (const key of tokenEntries.keys || []) {
+          const tokenDataStr = await env.OAUTH_KV.get(key.name);
+          if (tokenDataStr) {
+            const tokenData = JSON.parse(tokenDataStr);
+            if (tokenData.userId === props.userId && tokenData.apiKey) {
+              const freshProps = {
+                ...props,
+                apiKey: tokenData.apiKey,
+                lastRefreshed: tokenData.lastRefreshed
+              };
+              console.log("Updated props with fresh API key from token KV");
+              return [request, freshProps, ctx];
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching fresh API key from KV:", error);
+        // Continue with original props if KV lookup fails
+      }
     }
     
-    // If we're already authenticated, simply use the props we have
-    if (props?.authenticated && props?.apiKey) {
-      console.log("Valid authentication found, proceeding with request");
-      return [request, props, ctx];
-    }
-    
-    // Not authenticated or missing apiKey - return as is
     return [request, props, ctx];
   }
 
