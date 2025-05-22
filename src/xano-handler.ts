@@ -414,7 +414,7 @@ function renderLoginForm(state: string, errorMessage?: string): string {
 <body>
   <div class="container">
     <div class="logo">
-      <a href="https://snappy.ai" target="_blank">
+      <a href="https://mcp.snappy.ai" target="_blank">
         <img src="https://xnwv-v1z6-dvnr.n7c.xano.io/vault/ze3RfzZ2/XmHFEalO-FuKgcZQCCuxtdniBvk/U3GjRA../snappy+logo.png" alt="Snappy Logo">
       </a>
     </div>

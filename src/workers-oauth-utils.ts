@@ -473,7 +473,7 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
         <div class="container">
           <div class="precard">
             <div class="header">
-              <a href="https://snappy.ai" target="_blank">
+              <a href="https://mcp.snappy.ai" target="_blank">
                 ${logoUrl ? `<img src="${logoUrl}" alt="${serverName} Logo" class="logo">` : ''}
               </a>
               <h1 class="title"><strong>${serverName}</strong></h1>
