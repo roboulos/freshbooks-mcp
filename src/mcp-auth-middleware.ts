@@ -1,11 +1,15 @@
-import { XanoAuthService } from './auth-service'
-import { serviceAuthFactory, type ServiceCredentials } from './service-auth-factory'
+import { AuthService, XanoAuthService } from './auth-service'
+import { ServiceAuthFactory, serviceAuthFactory, type ServiceCredentials } from './service-auth-factory'
 
 export interface AuthenticatedEnv {
   KV: any
   XANO_API_KEY: string
   XANO_INSTANCE: string
   SESSION_CACHE: any
+  USAGE_QUEUE?: any
+  SERVICE_CREDENTIALS?: Record<string, ServiceCredentials>
+  XANO_BASE_URL?: string
+  XANO_API_ENDPOINT?: string
 }
 
 export interface AuthResult {
@@ -26,12 +30,24 @@ export interface UsageLogData {
 }
 
 export class MCPAuthMiddleware {
-  private authService: XanoAuthService
-  private env: AuthenticatedEnv
+  private authService: AuthService
+  private serviceAuthFactory: ServiceAuthFactory
 
-  constructor(env: AuthenticatedEnv) {
-    this.env = env
-    this.authService = new XanoAuthService()
+  constructor(
+    authService?: AuthService,
+    serviceAuthFactory?: ServiceAuthFactory,
+    env?: AuthenticatedEnv
+  ) {
+    this.authService = authService || new XanoAuthService(env)
+    this.serviceAuthFactory = serviceAuthFactory || new ServiceAuthFactory()
+  }
+
+  getServiceAuth(serviceName: string, env: AuthenticatedEnv) {
+    const credentials = env.SERVICE_CREDENTIALS?.[serviceName]
+    if (!credentials) {
+      throw new Error(`No credentials found for service: ${serviceName}`)
+    }
+    return this.serviceAuthFactory.create(credentials, env.SESSION_CACHE)
   }
 
   /**
@@ -42,7 +58,7 @@ export class MCPAuthMiddleware {
       // Extract API key from Authorization header
       const authHeader = request.headers.get('Authorization')
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return { authenticated: false, error: 'Missing Authorization header' }
+        return { authenticated: false, error: 'Missing API key' }
       }
 
       const apiKey = authHeader.substring(7) // Remove 'Bearer ' prefix
@@ -55,7 +71,33 @@ export class MCPAuthMiddleware {
         const now = new Date()
         // Check if cache is less than 5 minutes old
         if (now.getTime() - cachedAt.getTime() < 5 * 60 * 1000) {
-          // Create or reuse session
+          // Reuse existing session if available
+          if (cached.sessionId) {
+            // Check if session is still valid
+            const sessionData = await env.SESSION_CACHE.get(`session:${cached.sessionId}`)
+            if (sessionData) {
+              const session = JSON.parse(sessionData)
+              const lastActivity = new Date(session.lastActivity || session.lastActive)
+              // Check if session is less than 24 hours old
+              if (now.getTime() - lastActivity.getTime() < 24 * 60 * 60 * 1000) {
+                // Update last activity
+                session.lastActivity = now.toISOString()
+                await env.SESSION_CACHE.put(
+                  `session:${cached.sessionId}`,
+                  JSON.stringify(session),
+                  { expirationTtl: 86400 }
+                )
+                
+                return {
+                  authenticated: true,
+                  userId: cached.userId,
+                  sessionId: cached.sessionId
+                }
+              }
+            }
+          }
+          
+          // Create new session if needed
           const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
           return {
             authenticated: true,
@@ -113,11 +155,12 @@ export class MCPAuthMiddleware {
         { expirationTtl: 86400 } // 24 hours
       )
 
-      // Also cache the API key validation
+      // Also cache the API key validation with session info
       await env.SESSION_CACHE.put(
         `apikey:${apiKey}`,
         JSON.stringify({
           userId: validationResult.user.id,
+          sessionId: newSessionId,
           valid: true,
           cachedAt: new Date().toISOString()
         }),
@@ -142,7 +185,8 @@ export class MCPAuthMiddleware {
     toolName: string,
     handler: Function,
     sessionId: string,
-    userId: string
+    userId: string,
+    env?: AuthenticatedEnv
   ): Function {
     return async (...args: any[]) => {
       const startTime = Date.now()
@@ -150,6 +194,23 @@ export class MCPAuthMiddleware {
       let error: any
 
       try {
+        // Inject OAuth credentials if needed
+        if (env && toolName.startsWith('gmail_')) {
+          // Get OAuth token from cache
+          const oauthKey = `oauth:gmail:${userId}`
+          const oauthData = await env.SESSION_CACHE.get(oauthKey)
+          if (oauthData) {
+            const oauth = JSON.parse(oauthData)
+            // Inject auth into the first argument
+            args[0] = {
+              ...args[0],
+              _auth: {
+                access_token: oauth.access_token
+              }
+            }
+          }
+        }
+
         // Execute the actual tool
         result = await handler(...args)
         return result
@@ -159,17 +220,19 @@ export class MCPAuthMiddleware {
       } finally {
         // Log usage asynchronously - don't await
         const duration = Date.now() - startTime
-        this.logUsage({
-          sessionId,
-          userId,
-          toolName,
-          params: args[0] || {},
-          result,
-          error: error?.message,
-          duration
-        }).catch(err => {
-          console.error('Failed to log usage:', err)
-        })
+        if (env) {
+          this.logUsage({
+            sessionId,
+            userId,
+            toolName,
+            params: args[0] || {},
+            result,
+            error: error?.message,
+            duration
+          }, env).catch(err => {
+            console.error('Usage logging error:', err)
+          })
+        }
       }
     }
   }
@@ -177,28 +240,20 @@ export class MCPAuthMiddleware {
   /**
    * Logs tool usage asynchronously
    */
-  async logUsage(data: UsageLogData): Promise<void> {
+  async logUsage(data: UsageLogData, env: AuthenticatedEnv): Promise<void> {
     try {
       // Queue the usage log for batch processing
       const queueKey = `usage:queue:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       
-      await this.env.KV.put(
-        queueKey,
-        JSON.stringify({
+      await env.USAGE_QUEUE?.send({
+        body: JSON.stringify({
           ...data,
           timestamp: new Date().toISOString(),
           ip_address: '0.0.0.0', // Would come from request in real implementation
           ai_model: 'claude-3', // Would be detected from request
           cost: this.calculateCost(data.toolName)
-        }),
-        {
-          expirationTtl: 3600, // 1 hour - batch processor should handle before this
-          metadata: {
-            sessionId: data.sessionId,
-            userId: data.userId
-          }
-        }
-      )
+        })
+      })
     } catch (error) {
       // Don't throw - logging failures shouldn't break tool execution
       console.error('Usage logging error:', error)

@@ -42,7 +42,16 @@ export interface AuthService {
 }
 
 export class XanoAuthService implements AuthService {
-  private readonly baseUrl = 'https://xnwv-v1z6-dvnr.n7c.xano.io/api:e6emygx3'
+  private baseUrl: string
+  
+  constructor(env?: any) {
+    this.baseUrl = env?.XANO_BASE_URL || 'https://xnwv-v1z6-dvnr.n7c.xano.io'
+    if (env?.XANO_API_ENDPOINT) {
+      this.baseUrl += env.XANO_API_ENDPOINT
+    } else {
+      this.baseUrl += '/api:e6emygx3'
+    }
+  }
 
   /**
    * Validates API key by calling Xano auth/me endpoint
