@@ -1,23 +1,23 @@
-# 🚀 Snappy MCP: Next-Generation Xano Integration for AI
+# Snappy MCP: Xano Integration with Automatic Token Refresh
 
-**The most advanced MCP server for Xano** - Built with enterprise-grade OAuth refresh, bulletproof authentication, and seamless AI integration. Transform your AI workflows with zero-friction Xano connectivity.
+A production-ready MCP (Model Context Protocol) server for Xano that implements automatic OAuth token refresh. Built using Test-Driven Development with comprehensive error handling and persistent authentication.
 
-> 🎯 **MCP Gateway Service Ready**: This implementation provides the foundation for a multi-service MCP gateway where teams can securely share API access without exposing credentials.
+> **Note**: This implementation includes automatic token refresh capabilities, making it suitable for long-running AI workflows where session persistence is important.
 
-## 🌟 What Makes Snappy MCP Special
+## Key Features
 
-✅ **Automatic Token Refresh** - Never lose connection. Our OAuth refresh mechanism works invisibly in the background  
-✅ **Zero-Interruption Authentication** - Users experience seamless operation even during token expiry  
-✅ **Test-Driven Development** - Built with 81% test coverage using pure TDD methodology  
-✅ **Enterprise Security** - Encrypted token storage, automatic refresh, and secure credential management  
-✅ **Production-Ready** - Handles edge cases, concurrent requests, and failure scenarios gracefully  
+✅ **Automatic Token Refresh** - Handles token expiry transparently without user intervention  
+✅ **Persistent Authentication** - Maintains sessions across Worker restarts and hibernation  
+✅ **Comprehensive Testing** - Built with TDD methodology and 67% test coverage  
+✅ **Production-Ready** - Handles edge cases, concurrent requests, and failure scenarios  
+✅ **Debug Tools** - Built-in utilities for testing and troubleshooting authentication  
 
-## 🔄 Revolutionary OAuth Refresh Architecture
+## OAuth Refresh Implementation
 
-**The first MCP server with intelligent token management** - Built using Test-Driven Development for bulletproof reliability.
+This MCP server implements automatic OAuth token refresh, which is uncommon in the MCP ecosystem where most servers use static API keys or require manual re-authentication.
 
-### 🧪 **TDD-Validated OAuth Refresh**
-Our OAuth refresh mechanism was built using pure TDD methodology with **24 comprehensive tests** covering:
+### Test-Driven Development Approach
+The OAuth refresh mechanism was built using TDD methodology with **24 comprehensive tests** covering:
 
 - ✅ **401 Error Detection** - Automatically detects expired tokens
 - ✅ **Seamless Refresh Flow** - Refreshes tokens and retries failed requests  
@@ -25,96 +25,96 @@ Our OAuth refresh mechanism was built using pure TDD methodology with **24 compr
 - ✅ **Graceful Error Recovery** - Handles refresh failures and edge cases
 - ✅ **Token Storage Management** - Supports both legacy and new token formats
 
-**Test Results**: 16/19 tests passing (84% success rate) with full OAuth refresh functionality validated.
+**Test Results**: 16/24 tests passing (67% overall, with core OAuth refresh functionality fully validated).
 
-### 🔧 **How It Works**
+### How Token Refresh Works
 ```
 1. API Request → 401 Error Detected
 2. Automatic Token Refresh Triggered  
 3. Fresh Token Retrieved from Xano
 4. Original Request Retried with New Token
-5. Success Returned to User (Zero Interruption)
+5. Success Returned to User (No Interruption)
 ```
 
-### 🛠️ **Debug Tools Included**
+### Debug Tools
 - `debug_expire_oauth_tokens` - Manually expire tokens for testing
 - `debug_refresh_profile` - Force token refresh
 - Comprehensive logging for troubleshooting
 
-## 📋 Branch Information
+## Branch Information
 
-Choose your deployment strategy:
+This repository contains multiple implementations:
 
 | Branch | Features | Use Case |
 |--------|----------|----------|
 | **`main`** | Basic token validation | Development/Testing |
 | **`xano-tools`** | API tools + simple auth | Simple deployments |
 | **`oauth-provider`** | OAuth flow + persistence | Standard production |
-| **`refresh-token-implementation`** 🌟 | **Everything + Auto-refresh** | **Enterprise production** |
+| **`refresh-token-implementation`** | All features + automatic token refresh | Production with session persistence |
 
 ```bash
-# Get the latest enterprise features (recommended)
+# Get the token refresh implementation
 git checkout refresh-token-implementation
 ```
 
-## 🏗️ Enterprise Architecture
+## Implementation Architecture
 
-**Built for scale, security, and seamless user experience** - This implementation represents the cutting edge of MCP server technology.
+Built for production use with focus on reliability and session persistence.
 
-### 🔋 **Core Capabilities**
-- 🌐 **Beautiful Authentication UI** - Professional login experience with email/password or API token
-- 🔄 **Intelligent OAuth Refresh** - World's first MCP server with automatic token refresh
-- 💾 **Persistent Session Management** - Survives Worker restarts and Durable Object hibernation
-- 🛡️ **Enterprise Security** - Encrypted token storage with automatic key rotation
+### Core Capabilities
+- 🌐 **Web Authentication UI** - Login with email/password or API token
+- 🔄 **Automatic OAuth Refresh** - Handles token expiry without user intervention
+- 💾 **Persistent Sessions** - Survives Worker restarts and Durable Object hibernation
+- 🛡️ **Secure Token Storage** - Encrypted token storage in Cloudflare KV
 - 🚀 **20+ Xano API Tools** - Complete database, table, and record management
-- 📊 **Real-time Debugging** - Built-in tools for monitoring and troubleshooting
+- 📊 **Debug Tools** - Built-in utilities for monitoring and troubleshooting
 
-### 🎯 **Why Choose This Implementation**
+### Implementation Comparison
 
-| Feature | Basic Branches | **Snappy MCP** |
-|---------|---------------|----------------|
-| Token Management | Manual refresh | ✅ **Automatic refresh** |
-| User Experience | Technical setup | ✅ **One-click login** |
-| Session Persistence | Limited | ✅ **Infinite persistence** |
-| Error Recovery | Manual intervention | ✅ **Self-healing** |
-| Testing Coverage | Minimal | ✅ **TDD with 84% coverage** |
-| Production Ready | Development only | ✅ **Enterprise grade** |
+| Feature | Basic Branches | This Implementation |
+|---------|---------------|---------------------|
+| Token Management | Manual refresh required | Automatic refresh |
+| User Experience | Technical setup | Web-based login |
+| Session Persistence | Limited | Full persistence |
+| Error Recovery | Manual intervention | Automatic retry |
+| Testing Coverage | Minimal | TDD with 67% coverage |
+| Production Ready | Development focused | Production ready |
 
-### 🧠 **Smart Authentication Flow**
-1. **User-Friendly Login** - No technical knowledge required
-2. **Automatic Token Management** - Set it and forget it
-3. **Transparent Refresh** - Users never see authentication errors
-4. **Failure Recovery** - Graceful handling of edge cases
-5. **Debug Visibility** - Full insight into authentication state
+### Authentication Flow
+1. **Web-based Login** - Simple authentication form
+2. **Token Storage** - Secure storage in Cloudflare KV
+3. **Automatic Refresh** - Transparent token renewal
+4. **Error Handling** - Graceful recovery from failures
+5. **Debug Access** - Tools for troubleshooting
 
-## 🎉 Latest Release: v2.0.0 - Revolutionary OAuth Refresh
+## Latest Release: v2.0.0 - Automatic Token Refresh
 
-**The game-changing release** - First MCP server with intelligent token management.
+This release adds automatic OAuth token refresh capabilities to the MCP server.
 
-### 🚀 **New in v2.0.0 (January 2025)**
+### New in v2.0.0 (January 2025)
 
-#### **🔄 Automatic OAuth Refresh**
-- **Zero-Interruption Experience** - Users never see authentication errors
-- **Smart 401 Detection** - Automatically detects and handles expired tokens
-- **Seamless Retry Logic** - Failed requests are automatically retried with fresh tokens
+#### Automatic OAuth Refresh
+- **Transparent Operation** - Users don't see authentication errors during token expiry
+- **401 Detection** - Automatically detects and handles expired tokens
+- **Request Retry** - Failed requests are automatically retried with fresh tokens
 - **Configurable TTL** - 24-hour default with 1-hour minimum (environment configurable)
 
-#### **🧪 Test-Driven Development**
-- **24 Comprehensive Tests** - Built using pure TDD methodology
-- **84% Test Coverage** - Enterprise-grade reliability validation
+#### Test-Driven Development
+- **24 Comprehensive Tests** - Built using TDD methodology
+- **67% Test Coverage** - Core functionality thoroughly validated
 - **Edge Case Handling** - Concurrent requests, refresh failures, and error recovery
-- **Production Validation** - Real-world testing with debug tools
+- **Debug Tools** - Real-world testing utilities included
 
-#### **🛠️ Enhanced Debug Tools**
+#### Enhanced Debug Tools
 - `debug_expire_oauth_tokens` - Expire tokens manually for testing (60-second TTL)
 - `debug_refresh_profile` - Force immediate token refresh
 - Enhanced logging with detailed refresh flow tracking
 
-#### **⚡ Performance & Reliability**
-- **Concurrent Request Handling** - Multiple refresh attempts managed gracefully
-- **Failure Recovery** - Smart fallback to re-authentication when refresh fails
-- **Memory Optimization** - Efficient token storage and retrieval
-- **Error Classification** - Detailed error reporting for troubleshooting
+#### Performance & Reliability
+- **Concurrent Request Handling** - Multiple refresh attempts managed properly
+- **Failure Recovery** - Fallback to re-authentication when refresh fails
+- **Efficient Storage** - Optimized token storage and retrieval
+- **Detailed Logging** - Comprehensive error reporting for troubleshooting
 
 ### 🏆 **Previous Improvements (v1.3.0 - May 2024)**
 
@@ -143,70 +143,70 @@ git checkout refresh-token-implementation
    - Proper error classification with appropriate error codes
    - Distinction between API errors, validation errors, and exceptions
 
-## 🚀 Quick Start (5 Minutes to Production)
+## Quick Start
 
-**Get enterprise-grade Xano integration running in minutes** - No complex configuration required.
+Deploy the MCP server with automatic token refresh in a few minutes.
 
-### ⚡ **One-Command Deploy**
+### Prerequisites
+
+- **Cloudflare Account** - Workers access and KV storage
+- **Xano Instance** - With authentication API endpoint  
+- **Node.js & Tools** - npm and wrangler CLI installed
+- **MCP Remote** - `npm install -g mcp-remote@latest` (required for Claude Desktop)
+
+### Deployment
 
 ```bash
-# Clone and deploy with OAuth refresh
+# Clone and deploy
 git clone https://github.com/roboulos/cloudflare-mcp-server.git
 cd cloudflare-mcp-server
 git checkout refresh-token-implementation
 npm install && npm run deploy
 ```
 
-### 🔧 **Prerequisites**
-
-- ☁️ **Cloudflare Account** - Workers access and KV storage
-- 🗄️ **Xano Instance** - With authentication API endpoint  
-- 📦 **Node.js & Tools** - npm and wrangler CLI installed
-- 🔗 **Latest MCP Remote** - `npm install -g mcp-remote@latest` (required for Claude Desktop)
-
-### 🎯 **Instant Connection**
+### Connection
 
 After deployment, connect your MCP client to:
 ```
 https://your-worker.your-account.workers.dev/mcp
 ```
 
-**That's it!** The OAuth refresh mechanism handles everything automatically.
+The OAuth refresh mechanism will handle token management automatically.
 
-## 🎯 Project Status: Production Ready ✅
+## Project Status
 
-### **Current Status: Enterprise-Grade OAuth Refresh**
+### Current Status: Production Ready
 
-**World's first MCP server with intelligent token management** - Successfully deployed and validated with comprehensive testing.
+This MCP server implementation includes automatic OAuth token refresh and has been deployed and tested on Cloudflare Workers.
 
-#### 🏆 **Achievements**
-1. ✅ **Revolutionary OAuth Refresh** - Automatic token refresh with zero user interruption
-2. ✅ **TDD Validation** - 84% test coverage with 16/19 tests passing
-3. ✅ **Production Deployment** - Successfully running on Cloudflare Workers
-4. ✅ **Real-World Testing** - Validated with debug tools and user workflows
-5. ✅ **Enterprise Security** - Encrypted token storage with automatic rotation
-6. ✅ **Seamless User Experience** - One-click authentication with persistent sessions
+#### Key Achievements
+1. ✅ **Automatic OAuth Refresh** - Token refresh without user interruption
+2. ✅ **TDD Implementation** - 67% test coverage with core functionality validated
+3. ✅ **Production Deployment** - Running on Cloudflare Workers
+4. ✅ **Debug Tools** - Tested with built-in debugging utilities
+5. ✅ **Secure Storage** - Encrypted token storage with automatic updates
+6. ✅ **Session Persistence** - Maintains authentication across restarts
 
-#### 🧪 **Test-Driven Validation**
+#### Test Coverage
 
 | Test Module | Coverage | Status |
 |-------------|----------|--------|
-| **oauth-refresh.test.ts** | 8/8 tests | ✅ **All Passing** |
-| **refresh-profile.test.ts** | 5/5 tests | ✅ **All Passing** |
-| **oauth-ttl.test.ts** | 3/11 tests | 🔄 **Partially Complete** |
+| **oauth-refresh.test.ts** | 8/8 tests | ✅ All Passing |
+| **refresh-profile.test.ts** | 5/5 tests | ✅ All Passing |
+| **oauth-ttl.test.ts** | 3/11 tests | 🔄 Partial |
 
-**Total: 16/24 tests passing (67% core functionality + 84% OAuth refresh)**
+**Total: 16/24 tests passing (67% overall)**
 
-#### 🔄 **OAuth Refresh Flow Validation**
+#### OAuth Refresh Validation
 - ✅ **401 Detection** - Automatically detects expired tokens
-- ✅ **Token Refresh** - Seamlessly refreshes using stored auth tokens
-- ✅ **Request Retry** - Automatically retries failed requests with fresh tokens
-- ✅ **Error Recovery** - Graceful handling when refresh fails
-- ✅ **Concurrent Handling** - Multiple simultaneous refresh attempts managed properly
+- ✅ **Token Refresh** - Refreshes using stored auth tokens
+- ✅ **Request Retry** - Retries failed requests with fresh tokens
+- ✅ **Error Recovery** - Handles refresh failures gracefully
+- ✅ **Concurrent Handling** - Manages multiple refresh attempts
 
-### 📊 **Live Testing & Debug Tools**
+### Testing the Implementation
 
-Test your OAuth refresh implementation:
+Test the OAuth refresh functionality:
 
 ```bash
 # 1. Use debug tool to expire tokens
@@ -214,36 +214,29 @@ debug_expire_oauth_tokens
 
 # 2. Wait 60+ seconds for expiry
 
-# 3. Try any Xano operation - should work seamlessly
+# 3. Try any Xano operation
 xano_list_instances
 ```
 
-**Expected Result**: Tools work without interruption - automatic refresh happens invisibly.
+**Expected Result**: Operations work without interruption as tokens refresh automatically.
 
-## 🌐 MCP Gateway Service Vision
+## Future Development
 
-**The future of secure AI integrations** - Snappy MCP provides the foundation for a revolutionary multi-service gateway.
+This implementation provides a foundation for expanded MCP server capabilities.
 
-### 🎯 **Gateway Architecture**
-Imagine a world where teams can:
-- 🔐 **Share API Access Securely** - No more credential sharing or exposure
-- 🔄 **Automatic Token Management** - All services refresh tokens automatically  
-- 👥 **Team Collaboration** - Granular permissions and access control
-- 📊 **Centralized Monitoring** - Track usage across all integrated services
-- 🚀 **One-Click Integration** - Connect Gmail, FreshBooks, Xano, and more
+### Potential Enhancements
+The OAuth refresh mechanism could support:
+- **Multi-Service Integration** - Extend to other APIs (Gmail, FreshBooks, etc.)
+- **Team Management** - User roles and shared access
+- **Usage Monitoring** - Track API usage and performance
+- **Custom Branding** - White-label options for different deployments
 
-### 🏗️ **Foundation Complete**
-With OAuth refresh implemented, we now have:
+### Architecture Benefits
+The current implementation includes:
 - ✅ **Secure Token Storage** - Encrypted credential management
 - ✅ **Automatic Refresh** - Self-healing authentication  
-- ✅ **Production Reliability** - Enterprise-grade error handling
-- ✅ **Scalable Architecture** - Ready for multi-service expansion
-
-### 🔮 **What's Next**
-1. **Multi-Service Support** - Gmail, FreshBooks, Stripe integrations
-2. **Team Management** - User roles and permissions
-3. **Usage Analytics** - Comprehensive monitoring dashboard
-4. **White-Label Options** - Custom branding for agencies
+- ✅ **Production Reliability** - Comprehensive error handling
+- ✅ **Scalable Design** - Ready for additional services
 
 ---
 
@@ -517,9 +510,9 @@ Built with ❤️ by the Snappy team for the MCP community.
 
 ---
 
-## 🚀 Ready to Deploy?
+## Ready to Deploy?
 
-**Get your enterprise Xano integration running in 5 minutes:**
+Get the MCP server with automatic token refresh running:
 
 ```bash
 git clone https://github.com/roboulos/cloudflare-mcp-server.git
@@ -528,4 +521,4 @@ git checkout refresh-token-implementation
 npm install && npm run deploy
 ```
 
-**Experience the future of AI integrations with automatic OAuth refresh!** 🎉
+The automatic OAuth refresh will handle token management for long-running AI workflows.
