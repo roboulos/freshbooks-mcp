@@ -1,48 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-// Test interfaces based on your Xano schema
-interface XanoUser {
-  id: string
-  email: string
-  name: string
-  api_key: string | null
-  subscription_tier: string
-  status: string
-  last_login: string | null
-}
-
-interface MCPSession {
-  id: number
-  session_id: string
-  user_id: string
-  client_info: object
-  last_active: string
-  status: string
-}
-
-interface UsageLog {
-  id: number
-  session_id: string
-  user_id: string | null
-  function_id: number
-  input_params: object
-  output_result: object
-  http_status: number
-  response_time_ms: number
-  error_message: string | null
-  ai_model: string | null
-  ip_address: string | null
-  cost: number
-}
-
-// Mock functions we'll implement
-interface AuthService {
-  validateApiKey(apiKey: string): Promise<{ valid: boolean; user?: XanoUser }>
-  createSession(userId: string, clientInfo: object): Promise<MCPSession>
-  updateSessionActivity(sessionId: string): Promise<void>
-  logUsage(usageData: Partial<UsageLog>): Promise<UsageLog>
-  validateSession(sessionId: string): Promise<{ valid: boolean; session?: MCPSession }>
-}
+import { createAuthService, type AuthService, type XanoUser, type MCPSession, type UsageLog } from '../auth-service'
 
 describe('Authentication Integration with Xano', () => {
   let authService: AuthService
@@ -53,8 +10,8 @@ describe('Authentication Integration with Xano', () => {
     mockFetch = vi.fn()
     global.fetch = mockFetch
     
-    // We'll implement this service to coordinate with your Xano endpoints
-    authService = {} as AuthService
+    // Create actual auth service implementation
+    authService = createAuthService()
   })
 
   describe('API Key Validation', () => {
@@ -177,10 +134,13 @@ describe('Authentication Integration with Xano', () => {
 
       // Assert
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/mcp_sessions'),
+        `https://xnwv-v1z6-dvnr.n7c.xano.io/api:e6emygx3/mcp_sessions/${sessionId}`,
         expect.objectContaining({
           method: 'PUT',
-          body: expect.stringContaining(sessionId)
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json'
+          }),
+          body: expect.stringContaining('active')
         })
       )
     })
@@ -193,7 +153,7 @@ describe('Authentication Integration with Xano', () => {
         session_id: sessionId,
         user_id: 'user-123',
         client_info: {},
-        last_active: '2025-01-01T00:00:00Z',
+        last_active: new Date().toISOString(), // Use current time so it's not expired
         status: 'active'
       }
 
