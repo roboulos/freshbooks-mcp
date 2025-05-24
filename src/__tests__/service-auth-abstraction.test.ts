@@ -88,16 +88,18 @@ describe('Service Authentication Abstraction Layer', () => {
       }
 
       // Mock KV cache hit with valid data
-      mockKV.get.mockResolvedValueOnce(JSON.stringify({
-        valid: true,
-        cachedAt: new Date().toISOString()
-      }))
-      
-      // Even with cache, the implementation might need to validate
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true })
+      mockKV.get = vi.fn().mockImplementation(async (key) => {
+        console.log('[TEST] KV get called with key:', key);
+        if (key === `auth:validation:${credentials.id}`) {
+          return JSON.stringify({
+            valid: true,
+            cachedAt: new Date().toISOString()
+          });
+        }
+        return null;
       })
+      
+      // Should NOT need to call external API with valid cache
 
       const auth = factory.create(credentials, mockKV)
 
@@ -107,6 +109,7 @@ describe('Service Authentication Abstraction Layer', () => {
       // Assert
       expect(result.valid).toBe(true)
       expect(mockFetch).not.toHaveBeenCalled() // No external call needed!
+      expect(mockKV.get).toHaveBeenCalledWith(`auth:validation:${credentials.id}`)
     })
 
     it('should decrypt credentials only when needed', async () => {

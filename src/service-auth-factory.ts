@@ -107,11 +107,28 @@ class ApiKeyServiceAuth extends BaseServiceAuth {
     const cacheKey = `auth:validation:${this.credentials.id}`
     const cached = await this.kv.get(cacheKey)
     
-    if (cached && this.credentials.validation_cached_until) {
-      const cachedUntil = new Date(this.credentials.validation_cached_until)
-      if (cachedUntil > new Date()) {
-        const cachedData = JSON.parse(cached)
-        return { valid: cachedData.valid, cacheUntil: cachedUntil }
+    if (cached) {
+      const cachedData = JSON.parse(cached)
+      // Check if cache is still valid based on either:
+      // 1. validation_cached_until from credentials
+      // 2. cachedAt timestamp + TTL
+      
+      if (this.credentials.validation_cached_until) {
+        const cachedUntil = new Date(this.credentials.validation_cached_until)
+        const now = new Date()
+        if (cachedUntil > now && cachedData.valid !== undefined) {
+          return { valid: cachedData.valid, cacheUntil: cachedUntil }
+        }
+      }
+      
+      // Also check cachedAt timestamp if no validation_cached_until
+      if (cachedData.cachedAt && cachedData.valid !== undefined) {
+        // Check if cache is less than 5 minutes old
+        const cachedAt = new Date(cachedData.cachedAt)
+        const cacheExpiry = new Date(cachedAt.getTime() + 5 * 60 * 1000)
+        if (cacheExpiry > new Date()) {
+          return { valid: cachedData.valid, cacheUntil: cacheExpiry }
+        }
       }
     }
     
