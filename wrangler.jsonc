@@ -22,8 +22,27 @@
     {
       "binding": "OAUTH_KV",
       "id": "c43c2dc2174244c8bb1d4e5bb9cf6fa4"
+    },
+    {
+      "binding": "SESSION_CACHE",
+      "id": "a5bbbec35f76415ca305c1e0b0f0c36f"
     }
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "USAGE_QUEUE",
+        "queue": "usage-queue"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "usage-queue",
+        "max_batch_size": 100,
+        "max_batch_timeout": 30
+      }
+    ]
+  },
   "vars": {
     "XANO_BASE_URL": "https://xnwv-v1z6-dvnr.n7c.xano.io",
     "COOKIE_ENCRYPTION_KEY": "secure-oauth-cookie-encryption-key-for-xano-mcp"

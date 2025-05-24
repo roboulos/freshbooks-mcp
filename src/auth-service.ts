@@ -43,6 +43,7 @@ export interface AuthService {
 
 export class XanoAuthService implements AuthService {
   private baseUrl: string
+  private mcpBaseUrl: string
   
   constructor(env?: any) {
     this.baseUrl = env?.XANO_BASE_URL || 'https://xnwv-v1z6-dvnr.n7c.xano.io'
@@ -51,6 +52,10 @@ export class XanoAuthService implements AuthService {
     } else {
       this.baseUrl += '/api:e6emygx3'
     }
+    
+    // MCP endpoints use different API path
+    this.mcpBaseUrl = env?.XANO_BASE_URL || 'https://xnwv-v1z6-dvnr.n7c.xano.io'
+    this.mcpBaseUrl += '/api:q3EJkKDR'
   }
 
   /**
@@ -89,7 +94,7 @@ export class XanoAuthService implements AuthService {
       // Generate unique session ID
       const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       
-      const response = await fetch(`${this.baseUrl}/mcp_sessions`, {
+      const response = await fetch(`${this.mcpBaseUrl}/mcp_sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -119,7 +124,7 @@ export class XanoAuthService implements AuthService {
    */
   async updateSessionActivity(sessionId: string): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/mcp_sessions/${sessionId}`, {
+      const response = await fetch(`${this.mcpBaseUrl}/mcp_sessions/${sessionId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -144,7 +149,7 @@ export class XanoAuthService implements AuthService {
    */
   async validateSession(sessionId: string): Promise<{ valid: boolean; session?: MCPSession }> {
     try {
-      const response = await fetch(`${this.baseUrl}/mcp_sessions/${sessionId}`, {
+      const response = await fetch(`${this.mcpBaseUrl}/mcp_sessions/${sessionId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -181,7 +186,7 @@ export class XanoAuthService implements AuthService {
    */
   async logUsage(usageData: Partial<UsageLog>): Promise<UsageLog> {
     try {
-      const response = await fetch(`${this.baseUrl}/usage_logs`, {
+      const response = await fetch(`${this.mcpBaseUrl}/usage_logs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

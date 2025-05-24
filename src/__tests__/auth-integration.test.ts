@@ -134,7 +134,7 @@ describe('Authentication Integration with Xano', () => {
 
       // Assert
       expect(mockFetch).toHaveBeenCalledWith(
-        `https://xnwv-v1z6-dvnr.n7c.xano.io/api:e6emygx3/mcp_sessions/${sessionId}`,
+        `https://xnwv-v1z6-dvnr.n7c.xano.io/api:q3EJkKDR/mcp_sessions/${sessionId}`,
         expect.objectContaining({
           method: 'PUT',
           headers: expect.objectContaining({
