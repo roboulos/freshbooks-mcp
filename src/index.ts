@@ -2049,8 +2049,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
   }
 }
 
-// Create a new OAuthProvider instance following the GitHub pattern exactly
-export default new OAuthProvider({
+// Create the OAuth provider instance
+const oauthProvider = new OAuthProvider({
   kvNamespace: "OAUTH_KV",
   apiRoute: "/sse",
   apiHandler: MyMCP.mount("/sse"),
@@ -2081,6 +2081,9 @@ export default new OAuthProvider({
     };
   }
 });
+
+// Export the OAuth provider as default
+export default oauthProvider;
 
 // Queue message types for usage logging
 interface MessageBatch<T = any> {
