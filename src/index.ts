@@ -5,6 +5,7 @@ import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { XanoHandler } from "./xano-handler";
 import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
 import { refreshUserProfile } from "./refresh-profile";
+import { MCPAuthMiddleware } from "./mcp-auth-middleware";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
@@ -15,6 +16,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     name: "Snappy MCP Server",
     version: "1.0.0",
   });
+  
+  private middleware?: MCPAuthMiddleware;
   
   // Override the onNewRequest method to handle requests with authentication refresh
   async onNewRequest(req: Request, env: Env): Promise<[Request, XanoAuthProps, unknown]> {
@@ -122,7 +125,96 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return this.props?.apiKey || null;
   }
 
+  private getSessionInfo(): { sessionId: string; userId: string } | null {
+    if (!this.props?.authenticated || !this.props?.userId) {
+      return null;
+    }
+    
+    // Generate a session ID if not available
+    const sessionId = this.props.sessionId || `session-${this.props.userId}-${Date.now()}`;
+    const userId = this.props.userId;
+    
+    return { sessionId, userId };
+  }
+
+  private generateSessionId(): string {
+    return `session-${this.props?.userId || 'anon'}-${Date.now()}`;
+  }
+
+  private logUsage(data: {
+    toolName: string;
+    sessionId: string;
+    userId: string;
+    params: any;
+    result: any;
+    duration: number;
+    httpStatus: number;
+    error: string | null;
+  }): void {
+    // Fire-and-forget logging - don't block tool response
+    this.env.USAGE_QUEUE?.send({
+      body: JSON.stringify({
+        session_id: data.sessionId,
+        user_id: data.userId,
+        tool_name: data.toolName,
+        params: data.params,
+        result: data.result,
+        http_status: data.httpStatus,
+        duration: data.duration,
+        error: data.error,
+        timestamp: Date.now(),
+        ip_address: '0.0.0.0',
+        ai_model: 'claude-3-5-sonnet',
+        cost: this.calculateCost(data.toolName)
+      })
+    }).catch(err => {
+      console.error('Usage logging failed:', err);
+    });
+  }
+
+  private calculateCost(toolName: string): number {
+    // Simple cost calculation - could be more sophisticated
+    switch (toolName) {
+      case 'xano_list_instances':
+        return 0.001;
+      case 'xano_list_databases':
+        return 0.002;
+      default:
+        return 0.001;
+    }
+  }
+
+  private wrapWithUsageLogging(toolName: string, handler: Function): Function {
+    // Always ensure middleware is initialized
+    if (!this.middleware) {
+      this.middleware = new MCPAuthMiddleware(undefined, undefined, this.env);
+    }
+    
+    const sessionInfo = this.getSessionInfo();
+    if (!sessionInfo) {
+      // Still wrap but use anonymous session
+      return this.middleware.wrapToolCall(
+        toolName,
+        handler,
+        `session-anonymous-${Date.now()}`,
+        'anonymous',
+        this.env
+      );
+    }
+    
+    return this.middleware.wrapToolCall(
+      toolName,
+      handler,
+      sessionInfo.sessionId,
+      sessionInfo.userId,
+      this.env
+    );
+  }
+
   async init() {
+    // Initialize middleware for usage logging
+    this.middleware = new MCPAuthMiddleware(undefined, undefined, this.env);
+    
     // Debug tool to see what props are available
     this.server.tool(
       "debug_auth",
@@ -136,6 +228,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           apiKeyLength: this.props?.apiKey ? this.props.apiKey.length : 0
         });
 
+        const sessionInfo = this.getSessionInfo();
+
         return {
           content: [{
             type: "text",
@@ -148,7 +242,9 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               name: this.props?.name,
               email: this.props?.email,
               authenticated: this.props?.authenticated,
-              lastRefreshed: this.props?.lastRefreshed || "never"
+              lastRefreshed: this.props?.lastRefreshed || "never",
+              sessionInfo: sessionInfo,
+              hasMiddleware: !!this.middleware
             }, null, 2)
           }]
         };
@@ -365,7 +461,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_list_instances",
       {},
-      async () => {
+      this.wrapWithUsageLogging("xano_list_instances", async () => {
         // Check authentication
         console.log("xano_list_instances called", {
           authenticated: this.props?.authenticated,
@@ -412,7 +508,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }]
           };
         }
-      }
+      })
     );
 
     // Get instance details
@@ -2032,11 +2128,25 @@ export default new OAuthProvider({
   }
 });
 
-// Queue consumer handler for usage logging (to be implemented separately)
-// export async function queue(batch: MessageBatch, env: Env): Promise<void> {
-//   const { processUsageBatch } = await import('./queue-consumer');
-//   await processUsageBatch(batch, env);
-// }
+// Queue message types for usage logging
+interface MessageBatch<T = any> {
+  readonly queue: string
+  readonly messages: Message<T>[]
+}
+
+interface Message<T = any> {
+  readonly id: string
+  readonly timestamp: Date
+  readonly body: T
+  ack(): void
+  retry(): void
+}
+
+// Queue consumer handler for usage logging
+export async function queue(batch: MessageBatch, env: Env): Promise<void> {
+  const { default: queueConsumer } = await import('./queue-consumer');
+  await queueConsumer.queue(batch, env);
+}
 
 // Environment type
 export interface Env {

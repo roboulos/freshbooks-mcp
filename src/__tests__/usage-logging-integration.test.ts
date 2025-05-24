@@ -25,12 +25,16 @@ describe('Usage Logging Integration', () => {
 
   describe('Tool wrapping with usage logging', () => {
     it('should log usage when wrapped tool is called successfully', async () => {
-      // Arrange - Mock a tool that returns test data
-      const mockTool = vi.fn().mockResolvedValue({
-        instances: [{ 
-          name: 'test-instance', 
-          display: 'Test Instance' 
-        }]
+      // Arrange - Mock a tool that returns test data with small delay
+      const mockTool = vi.fn().mockImplementation(async () => {
+        // Add small delay to ensure duration > 0
+        await new Promise(resolve => setTimeout(resolve, 1))
+        return {
+          instances: [{ 
+            name: 'test-instance', 
+            display: 'Test Instance' 
+          }]
+        }
       })
 
       // Wrap the tool with usage logging
