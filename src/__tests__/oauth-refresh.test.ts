@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { makeApiRequest } from '../utils';
-import { refreshUserProfile } from '../refresh-profile';
 
-// Mock the refresh-profile import to avoid circular dependencies
+// Mock the refresh-profile module completely
+const mockRefreshUserProfile = vi.fn();
 vi.mock('../refresh-profile', () => ({
-  refreshUserProfile: vi.fn(),
+  refreshUserProfile: mockRefreshUserProfile,
 }));
 
 // Mock fetch globally
@@ -59,7 +59,6 @@ describe('OAuth Token Refresh Mechanism', () => {
         });
 
       // Mock successful refresh
-      const mockRefreshUserProfile = vi.mocked(refreshUserProfile);
       mockRefreshUserProfile.mockResolvedValue({
         success: true,
         profile: {
@@ -100,7 +99,6 @@ describe('OAuth Token Refresh Mechanism', () => {
       });
 
       // Mock failed refresh
-      const mockRefreshUserProfile = vi.mocked(refreshUserProfile);
       mockRefreshUserProfile.mockResolvedValue({
         success: false,
         error: 'Refresh failed',
@@ -134,7 +132,7 @@ describe('OAuth Token Refresh Mechanism', () => {
         json: () => Promise.resolve({ message: 'Server error' }),
       });
 
-      const mockRefreshUserProfile = vi.mocked(refreshUserProfile);
+      // mockRefreshUserProfile is already available from module scope
 
       // Act: Make API request
       const result = await makeApiRequest(
@@ -181,185 +179,23 @@ describe('OAuth Token Refresh Mechanism', () => {
     });
   });
 
-  describe('Token Refresh Profile Function', () => {
-    it('should successfully refresh user profile with xano_auth_token storage', async () => {
-      // Arrange: Mock KV storage with xano_auth_token format
-      mockKV.list.mockImplementation(({ prefix }) => {
-        if (prefix === 'xano_auth_token:') {
-          return Promise.resolve({
-            keys: [{ name: 'xano_auth_token:user123' }],
-          });
-        }
-        return Promise.resolve({ keys: [] });
-      });
-
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        userId: 'user123',
-        authToken: 'stored_auth_token_123',
-        email: 'old@example.com',
-        name: 'Old Name',
-      }));
-
-      // Mock successful auth/me call
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: () => Promise.resolve({
-          id: 'user123',
-          api_key: 'fresh_api_key_456',
-          email: 'new@example.com',
-          name: 'Updated Name',
-        }),
-      });
-
-      // Act: Refresh profile
-      const result = await refreshUserProfile(mockEnv);
-
-      // Assert: Should successfully refresh
-      expect(result.success).toBe(true);
-      expect(result.profile).toEqual({
-        apiKey: 'fresh_api_key_456',
-        userId: 'user123',
-        name: 'Updated Name',
-        email: 'new@example.com',
-      });
-
-      // Verify KV was updated
-      expect(mockKV.put).toHaveBeenCalledWith(
-        'xano_auth_token:user123',
-        expect.stringContaining('fresh_api_key_456')
-      );
-    });
-
-    it('should fall back to legacy token: storage format', async () => {
-      // Arrange: Mock KV storage with legacy format
-      mockKV.list.mockImplementation(({ prefix }) => {
-        if (prefix === 'xano_auth_token:') {
-          return Promise.resolve({ keys: [] });
-        }
-        if (prefix === 'token:') {
-          return Promise.resolve({
-            keys: [{ name: 'token:abc123' }],
-          });
-        }
-        return Promise.resolve({ keys: [] });
-      });
-
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        accessToken: 'legacy_token_123',
-        userId: 'user456',
-        email: 'legacy@example.com',
-      }));
-
-      // Mock successful auth/me call
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: () => Promise.resolve({
-          id: 'user456',
-          api_key: 'fresh_api_key_789',
-          email: 'legacy@example.com',
-          name: 'Legacy User',
-        }),
-      });
-
-      // Act: Refresh profile
-      const result = await refreshUserProfile(mockEnv);
-
-      // Assert: Should successfully refresh with legacy format
-      expect(result.success).toBe(true);
-      expect(result.profile.apiKey).toBe('fresh_api_key_789');
-      expect(result.profile.userId).toBe('user456');
-    });
-
-    it('should fail when no auth tokens are found', async () => {
-      // Arrange: Mock empty KV storage
-      mockKV.list.mockResolvedValue({ keys: [] });
-
-      // Act: Attempt to refresh profile
-      const result = await refreshUserProfile(mockEnv);
-
-      // Assert: Should fail with appropriate error
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('No authentication tokens found');
-    });
-
-    it('should fail when auth/me request fails', async () => {
-      // Arrange: Mock KV with valid token
-      mockKV.list.mockResolvedValue({
-        keys: [{ name: 'xano_auth_token:user123' }],
-      });
-
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        userId: 'user123',
-        authToken: 'valid_token_123',
-      }));
-
-      // Mock failed auth/me call
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        text: () => Promise.resolve('Invalid token'),
-      });
-
-      // Act: Attempt to refresh profile
-      const result = await refreshUserProfile(mockEnv);
-
-      // Assert: Should fail
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Failed to refresh user profile');
-    });
-
-    it('should fail when auth/me returns no api_key', async () => {
-      // Arrange: Mock valid setup but response missing api_key
-      mockKV.list.mockResolvedValue({
-        keys: [{ name: 'xano_auth_token:user123' }],
-      });
-
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        userId: 'user123',
-        authToken: 'valid_token_123',
-      }));
-
-      // Mock auth/me response without api_key
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: () => Promise.resolve({
-          id: 'user123',
-          email: 'test@example.com',
-          // Missing api_key field
-        }),
-      });
-
-      // Act: Attempt to refresh profile
-      const result = await refreshUserProfile(mockEnv);
-
-      // Assert: Should fail
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('API key not found in response');
-    });
-  });
+  // Note: Direct refreshUserProfile tests moved to refresh-profile.test.ts
 
   describe('Complete OAuth Refresh Flow', () => {
     it('should handle complete flow: 401 -> refresh -> retry -> success', async () => {
-      // Arrange: Setup complete mock scenario
-      mockKV.list.mockResolvedValue({
-        keys: [{ name: 'xano_auth_token:user123' }],
+      // Arrange: Mock successful refresh
+      mockRefreshUserProfile.mockResolvedValue({
+        success: true,
+        profile: {
+          apiKey: 'refreshed_api_key',
+          userId: 'user123',
+          name: 'Test User',
+          email: 'test@example.com',
+        },
       });
 
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        userId: 'user123',
-        authToken: 'stored_auth_token',
-      }));
-
       // First call: 401 error
-      // Second call: auth/me success for refresh
-      // Third call: retry success
+      // Second call: retry success with fresh token
       mockFetch
         .mockResolvedValueOnce({
           ok: false,
@@ -367,17 +203,6 @@ describe('OAuth Token Refresh Mechanism', () => {
           statusText: 'Unauthorized',
           headers: { get: () => 'application/json' },
           json: () => Promise.resolve({ message: 'Token expired' }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: () => Promise.resolve({
-            id: 'user123',
-            api_key: 'refreshed_api_key',
-            email: 'test@example.com',
-            name: 'Test User',
-          }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -396,21 +221,22 @@ describe('OAuth Token Refresh Mechanism', () => {
       );
 
       // Assert: Complete flow worked
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch).toHaveBeenCalledTimes(2); // Original + retry
       expect(result).toEqual({ result: 'success after refresh' });
-      expect(mockKV.put).toHaveBeenCalled(); // Profile was updated
+      expect(mockRefreshUserProfile).toHaveBeenCalledWith(mockEnv);
     });
 
     it('should handle refresh success but retry failure', async () => {
-      // Arrange: Setup scenario where refresh works but retry fails
-      mockKV.list.mockResolvedValue({
-        keys: [{ name: 'xano_auth_token:user123' }],
+      // Arrange: Mock successful refresh but failed retry
+      mockRefreshUserProfile.mockResolvedValue({
+        success: true,
+        profile: {
+          apiKey: 'refreshed_api_key',
+          userId: 'user123',
+          name: 'Test User',
+          email: 'test@example.com',
+        },
       });
-
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        userId: 'user123',
-        authToken: 'stored_auth_token',
-      }));
 
       mockFetch
         .mockResolvedValueOnce({
@@ -419,16 +245,6 @@ describe('OAuth Token Refresh Mechanism', () => {
           statusText: 'Unauthorized',
           headers: { get: () => 'application/json' },
           json: () => Promise.resolve({ message: 'Token expired' }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: () => Promise.resolve({
-            id: 'user123',
-            api_key: 'refreshed_api_key',
-            email: 'test@example.com',
-          }),
         })
         .mockResolvedValueOnce({
           ok: false,
@@ -471,35 +287,25 @@ describe('OAuth Token Refresh Mechanism', () => {
     });
 
     it('should handle multiple concurrent refresh attempts gracefully', async () => {
-      // Arrange: Setup for concurrent refresh scenario
-      mockKV.list.mockResolvedValue({
-        keys: [{ name: 'xano_auth_token:user123' }],
+      // Arrange: Mock successful refresh for concurrent scenario
+      mockRefreshUserProfile.mockResolvedValue({
+        success: true,
+        profile: {
+          apiKey: 'refreshed_api_key',
+          userId: 'user123',
+          name: 'Test User',
+          email: 'test@example.com',
+        },
       });
 
-      mockKV.get.mockResolvedValue(JSON.stringify({
-        userId: 'user123',
-        authToken: 'stored_auth_token',
-      }));
-
-      // Mock responses for concurrent requests
-      mockFetch
-        .mockResolvedValue({
-          ok: false,
-          status: 401,
-          statusText: 'Unauthorized',
-          headers: { get: () => 'application/json' },
-          json: () => Promise.resolve({ message: 'Token expired' }),
-        })
-        .mockResolvedValue({
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: () => Promise.resolve({
-            id: 'user123',
-            api_key: 'refreshed_api_key',
-            email: 'test@example.com',
-          }),
-        });
+      // Mock all requests as 401 (no retries for simplicity)
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ message: 'Token expired' }),
+      });
 
       // Act: Make multiple concurrent requests that would trigger refresh
       const requests = [
@@ -509,12 +315,11 @@ describe('OAuth Token Refresh Mechanism', () => {
       ];
 
       // Wait for all to complete
-      await Promise.all(requests);
+      const results = await Promise.all(requests);
 
-      // Assert: Should handle concurrent refresh attempts
-      // (This is a basic test - real implementation might need more sophisticated
-      // concurrency control to avoid multiple simultaneous refresh calls)
-      expect(mockFetch).toHaveBeenCalled();
+      // Assert: All should attempt refresh (though may return 401 if refresh fails on retry)
+      expect(mockRefreshUserProfile).toHaveBeenCalled();
+      expect(results.every(r => r.status === 401)).toBe(true);
     });
   });
 });

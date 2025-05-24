@@ -477,3 +477,83 @@ export class XanoHandlerClass {
 
 // Export handler instance
 export const XanoHandler = new XanoHandlerClass();
+
+// Export the OAuth callback handler for testing
+export async function handleOAuthCallback(context: { request: Request; env: any }) {
+    try {
+        // Get token and state from query parameters
+        const url = new URL(context.request.url);
+        const token = url.searchParams.get("token");
+        const state = url.searchParams.get("state");
+        
+        if (!token || !state) {
+            return new Response("Missing token or state parameter", { status: 400 });
+        }
+        
+        // Parse the original OAuth request info from state
+        const oauthReqInfo = JSON.parse(atob(state)) as AuthRequest;
+        if (!oauthReqInfo.clientId) {
+            return new Response("Invalid state", { status: 400 });
+        }
+        
+        // Fetch user info from Xano
+        const [userData, errResponse] = await fetchXanoUserInfo({
+            base_url: context.env.XANO_BASE_URL,
+            token,
+        });
+        
+        if (errResponse) {
+            return errResponse;
+        }
+        
+        // Extract user data
+        const userId = userData.id || token.substring(0, 10);
+        const name = userData.name || userData.email || 'Xano User';
+        const email = userData.email;
+        // Extract API key from auth/me response
+        const apiKey = userData.api_key || token;
+
+        // Store the token explicitly in KV storage for our refresh mechanism
+        await context.env.OAUTH_KV.put(
+            `xano_auth_token:${userId}`,
+            JSON.stringify({
+                authToken: token,
+                apiKey: apiKey,
+                userId: userId,
+                name: name,
+                email: email,
+                authenticated: true,
+                lastRefreshed: new Date().toISOString()
+            }),
+            { expirationTtl: 604800 } // 7 days
+        );
+        
+        // Calculate token TTL with environment variable control
+        const configuredTTL = parseInt(context.env.OAUTH_TOKEN_TTL || "86400"); // 24 hours default
+        const tokenTTL = Math.max(configuredTTL, 3600); // Minimum 1 hour
+
+        // Complete authorization
+        const { redirectTo } = await context.env.OAUTH_PROVIDER.completeAuthorization({
+            request: oauthReqInfo,
+            userId,
+            metadata: {
+                label: name,
+            },
+            scope: oauthReqInfo.scope,
+            props: {
+                accessToken: token,
+                name,
+                email,
+                apiKey: apiKey,
+                userId: userId,
+                authenticated: true,
+            } as Props,
+            accessTokenTTL: tokenTTL,
+        });
+        
+        return Response.redirect(redirectTo);
+    } catch (error) {
+        console.error("Error in OAuth callback:", error);
+        return new Response("Error completing authentication", { status: 500 });
+    }
+}
