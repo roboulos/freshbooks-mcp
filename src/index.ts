@@ -138,32 +138,27 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return { sessionId, userId };
   }
 
+  private logToolCall(toolName: string): void {
+    const sessionInfo = this.getSessionInfo();
+    if (sessionInfo) {
+      logUsage('tool_executed', {
+        userId: sessionInfo.userId,
+        sessionId: sessionInfo.sessionId,
+        details: { tool: toolName },
+        env: this.env
+      });
+    }
+  }
+
 
   private wrapWithUsageLogging(toolName: string, handler: Function): Function {
-    // Always ensure middleware is initialized
-    if (!this.middleware) {
-      this.middleware = new MCPAuthMiddleware(undefined, undefined, this.env);
-    }
-    
-    const sessionInfo = this.getSessionInfo();
-    if (!sessionInfo) {
-      // Still wrap but use anonymous session
-      return this.middleware.wrapToolCall(
-        toolName,
-        handler,
-        `session-anonymous-${Date.now()}`,
-        'anonymous',
-        this.env
-      );
-    }
-    
-    return this.middleware.wrapToolCall(
-      toolName,
-      handler,
-      sessionInfo.sessionId,
-      sessionInfo.userId,
-      this.env
-    );
+    return async (...args: any[]) => {
+      // Simple logging at the start
+      this.logToolCall(toolName);
+      
+      // Execute the original handler
+      return await handler(...args);
+    };
   }
 
   async init() {
@@ -416,20 +411,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_list_instances",
       {},
-      async () => {
-        const startTime = Date.now();
-        const sessionInfo = this.getSessionInfo();
-        
-        // Simple usage logging - fire and forget
-        if (sessionInfo) {
-          logUsage('tool_executed', {
-            userId: sessionInfo.userId,
-            sessionId: sessionInfo.sessionId,
-            details: { tool: 'xano_list_instances' },
-            env: this.env
-          });
-        }
-
+      this.wrapWithUsageLogging("xano_list_instances", async () => {
         // Check authentication
         console.log("xano_list_instances called", {
           authenticated: this.props?.authenticated,
@@ -476,7 +458,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }]
           };
         }
-      }
+      })
     );
 
     // Get instance details
@@ -485,7 +467,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       {
         instance_name: z.string().describe("The name of the Xano instance")
       },
-      async ({ instance_name }) => {
+      this.wrapWithUsageLogging("xano_get_instance_details", async ({ instance_name }) => {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
@@ -520,7 +502,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }]
           };
         }
-      }
+      })
     );
 
     // List databases
