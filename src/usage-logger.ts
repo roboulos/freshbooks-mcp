@@ -18,18 +18,29 @@ export function logUsage(eventType: string, data: UsageLogData): void {
 
 async function sendUsageLog(eventType: string, data: UsageLogData): Promise<void> {
   const payload = {
-    event_type: eventType,
-    user_id: data.userId || null,
-    session_id: data.sessionId || null,
-    details: data.details || {},
-    timestamp: new Date().toISOString()
+    session_id: data.sessionId || '',
+    user_id: data.userId || '',
+    tool_name: data.details?.tool || eventType,
+    params: data.details || {},
+    result: data.details?.result || {},
+    error: data.details?.error || '',
+    duration: data.details?.duration || 0,
+    timestamp: Date.now(),
+    ip_address: '',
+    ai_model: 'claude-3.5-sonnet',
+    cost: 0
   };
 
-  await fetch(`${data.env.XANO_BASE_URL}/api:Snappy/usage_logs`, {
+  const response = await fetch(`${data.env.XANO_BASE_URL}/api:q3EJkKDR/usage_logs`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload)
   });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HTTP ${response.status}: ${errorText}`);
+  }
 }

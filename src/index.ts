@@ -476,7 +476,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }]
           };
         }
-      })
+      }
     );
 
     // Get instance details
