@@ -137,52 +137,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return { sessionId, userId };
   }
 
-  private generateSessionId(): string {
-    return `session-${this.props?.userId || 'anon'}-${Date.now()}`;
-  }
-
-  private logUsage(data: {
-    toolName: string;
-    sessionId: string;
-    userId: string;
-    params: any;
-    result: any;
-    duration: number;
-    httpStatus: number;
-    error: string | null;
-  }): void {
-    // Fire-and-forget logging - don't block tool response
-    this.env.USAGE_QUEUE?.send({
-      body: JSON.stringify({
-        session_id: data.sessionId,
-        user_id: data.userId,
-        tool_name: data.toolName,
-        params: data.params,
-        result: data.result,
-        http_status: data.httpStatus,
-        duration: data.duration,
-        error: data.error,
-        timestamp: Date.now(),
-        ip_address: '0.0.0.0',
-        ai_model: 'claude-3-5-sonnet',
-        cost: this.calculateCost(data.toolName)
-      })
-    }).catch(err => {
-      console.error('Usage logging failed:', err);
-    });
-  }
-
-  private calculateCost(toolName: string): number {
-    // Simple cost calculation - could be more sophisticated
-    switch (toolName) {
-      case 'xano_list_instances':
-        return 0.001;
-      case 'xano_list_databases':
-        return 0.002;
-      default:
-        return 0.001;
-    }
-  }
 
   private wrapWithUsageLogging(toolName: string, handler: Function): Function {
     // Always ensure middleware is initialized
