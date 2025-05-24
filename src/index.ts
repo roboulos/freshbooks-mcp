@@ -6,6 +6,7 @@ import { XanoHandler } from "./xano-handler";
 import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
 import { refreshUserProfile } from "./refresh-profile";
 import { MCPAuthMiddleware } from "./mcp-auth-middleware";
+import { logUsage } from "./usage-logger";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
@@ -415,7 +416,20 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_list_instances",
       {},
-      this.wrapWithUsageLogging("xano_list_instances", async () => {
+      async () => {
+        const startTime = Date.now();
+        const sessionInfo = this.getSessionInfo();
+        
+        // Simple usage logging - fire and forget
+        if (sessionInfo) {
+          logUsage('tool_executed', {
+            userId: sessionInfo.userId,
+            sessionId: sessionInfo.sessionId,
+            details: { tool: 'xano_list_instances' },
+            env: this.env
+          });
+        }
+
         // Check authentication
         console.log("xano_list_instances called", {
           authenticated: this.props?.authenticated,
