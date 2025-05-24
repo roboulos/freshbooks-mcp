@@ -130,8 +130,8 @@ export function extractToken(request: Request): string | null {
   return null;
 }
 
-// Utility function to make API requests
-export async function makeApiRequest(url: string, token: string, method = "GET", data?: any) {
+// Utility function to make API requests with automatic refresh on 401
+export async function makeApiRequest(url: string, token: string, method = "GET", data?: any, env?: any) {
   try {
     const headers: Record<string, string> = {
       "Authorization": `Bearer ${token}`,
@@ -187,6 +187,84 @@ export async function makeApiRequest(url: string, token: string, method = "GET",
     
     // For JSON responses
     if (!response.ok) {
+      // Handle 401 errors with automatic refresh
+      if (response.status === 401 && env) {
+        console.log("Got 401 Unauthorized - attempting automatic token refresh...");
+        
+        try {
+          // Import refreshUserProfile dynamically to avoid circular imports
+          const { refreshUserProfile } = await import('./refresh-profile');
+          const refreshResult = await refreshUserProfile(env);
+          
+          if (refreshResult.success && refreshResult.profile?.apiKey) {
+            console.log("Token refresh successful - retrying original request");
+            
+            // Retry the original request with fresh token
+            const retryHeaders = {
+              ...headers,
+              "Authorization": `Bearer ${refreshResult.profile.apiKey}`
+            };
+            
+            const retryOptions: RequestInit = {
+              method,
+              headers: retryHeaders,
+            };
+            
+            if (data && (method === "POST" || method === "PUT" || method === "PATCH")) {
+              retryOptions.body = JSON.stringify(data);
+            }
+            
+            const retryResponse = await fetch(url, retryOptions);
+            
+            if (retryResponse.ok) {
+              console.log("Retry request successful after token refresh");
+              
+              // Handle the successful retry response using the same logic as above
+              if (retryResponse.status === 204) {
+                return { success: true, message: "Operation completed successfully" };
+              }
+              
+              if (url.includes('/bulk')) {
+                const retryText = await retryResponse.text();
+                if (!retryText || retryText.trim() === '') {
+                  return { success: true, message: "Bulk operation completed successfully" };
+                }
+                try {
+                  return JSON.parse(retryText);
+                } catch (e) {
+                  return { success: true, message: "Bulk operation completed successfully", rawResponse: retryText };
+                }
+              }
+              
+              const retryContentType = retryResponse.headers.get('content-type');
+              if (!retryContentType || !retryContentType.includes('application/json')) {
+                return { success: true, message: "Operation completed successfully" };
+              }
+              
+              const retryText = await retryResponse.text();
+              if (!retryText) {
+                return { success: true, message: "Operation completed successfully" };
+              }
+              
+              try {
+                return JSON.parse(retryText);
+              } catch (e) {
+                return { success: true, rawResponse: retryText };
+              }
+            } else {
+              console.log(`Retry request failed with status: ${retryResponse.status}`);
+            }
+          } else {
+            console.log("Token refresh failed:", refreshResult.error);
+          }
+        } catch (refreshError) {
+          console.error("Error during automatic token refresh:", refreshError);
+        }
+        
+        // If refresh failed or retry failed, fall through to return the original 401 error
+        console.log("Automatic refresh failed - returning 401 error");
+      }
+      
       const errorData = await response.json().catch(() => ({}));
       return { 
         error: errorData.message || `HTTP Error: ${response.status} ${response.statusText}`,

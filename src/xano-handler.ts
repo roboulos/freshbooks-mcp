@@ -214,6 +214,12 @@ app.get("/callback", async (c) => {
         
         console.log(`Explicitly stored auth token in KV for user ${userId}`);
         
+        // Calculate token TTL with environment variable control
+        const configuredTTL = parseInt(c.env.OAUTH_TOKEN_TTL || "86400"); // 24 hours default
+        const tokenTTL = Math.max(configuredTTL, 3600); // Minimum 1 hour
+        
+        console.log(`Setting OAuth token TTL to ${tokenTTL} seconds (${tokenTTL / 3600} hours)`);
+
         // Complete authorization exactly like GitHub example
         const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
             request: oauthReqInfo,
@@ -231,6 +237,7 @@ app.get("/callback", async (c) => {
                 userId: userId, // Explicitly set userId for hello tool
                 authenticated: true,
             } as Props,
+            accessTokenTTL: tokenTTL, // Enable automatic OAuth refresh when token expires
         });
         
         return Response.redirect(redirectTo);

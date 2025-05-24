@@ -211,6 +211,53 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
     
+    // Tool to manually expire OAuth tokens for testing
+    this.server.tool(
+      "debug_expire_oauth_tokens",
+      {},
+      async () => {
+        try {
+          // Check authentication
+          if (!this.props?.authenticated) {
+            return {
+              content: [{ type: "text", text: "Authentication required to use this tool." }]
+            };
+          }
+          
+          // List all token entries and manually expire them
+          const tokenEntries = await this.env.OAUTH_KV.list({ prefix: 'token:' });
+          const expiredCount = tokenEntries.keys?.length || 0;
+          
+          for (const key of tokenEntries.keys || []) {
+            // Set expiration to 60 seconds from now (minimum allowed by Cloudflare KV)
+            const tokenData = await this.env.OAUTH_KV.get(key.name);
+            if (tokenData) {
+              await this.env.OAUTH_KV.put(key.name, tokenData, { expirationTtl: 60 });
+            }
+          }
+          
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                message: `Manually expired ${expiredCount} OAuth tokens`,
+                note: "Tokens will expire in 60 seconds. Wait 1 minute, then try another MCP tool call to trigger OAuth re-authentication"
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          console.error("Error expiring OAuth tokens:", error);
+          return {
+            content: [{
+              type: "text",
+              text: `Error expiring OAuth tokens: ${error.message || "Unknown error"}`
+            }]
+          };
+        }
+      }
+    );
+    
     // Tool to examine the KV storage
     this.server.tool(
       "debug_kv_storage",
@@ -342,7 +389,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         try {
           const url = "https://app.xano.com/api:meta/instance";
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -438,7 +485,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace`;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -491,7 +538,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}`;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -544,7 +591,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(database_id)}/table`;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -601,7 +648,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}`;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -664,7 +711,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema`;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -754,7 +801,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             tag: tag || []
           };
           
-          const result = await makeApiRequest(url, token, "POST", data);
+          const result = await makeApiRequest(url, token, "POST", data, this.env);
 
           if (result.error) {
             return {
@@ -824,7 +871,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           console.log("Updating table with:", JSON.stringify(data, null, 2));
           
-          const result = await makeApiRequest(url, token, "PUT", data);
+          const result = await makeApiRequest(url, token, "PUT", data, this.env);
 
           // Handle response including null/empty responses
           if (result && result.error) {
@@ -891,7 +938,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           console.log(`Deleting table ${table_id} from workspace ${workspace_id}`);
           
-          const result = await makeApiRequest(url, token, "DELETE");
+          const result = await makeApiRequest(url, token, "DELETE", undefined, this.env);
 
           // Null or empty response is common for successful DELETE operations
           // First check if result exists and has an error property
@@ -998,7 +1045,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           console.log(`Fetching schema from ${schemaUrl}`);
           
           // First get the current schema
-          const schemaResult = await makeApiRequest(schemaUrl, token);
+          const schemaResult = await makeApiRequest(schemaUrl, token, "GET", undefined, this.env);
           
           if (schemaResult.error) {
             return {
@@ -1054,7 +1101,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           // Update the schema
           console.log(`Updating schema at ${schemaUrl}`);
-          const result = await makeApiRequest(schemaUrl, token, "PUT", data);
+          const result = await makeApiRequest(schemaUrl, token, "PUT", data, this.env);
           
           if (result && result.error) {
             return {
@@ -1148,7 +1195,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             new_name: new_name
           };
           
-          const result = await makeApiRequest(url, token, "POST", data);
+          const result = await makeApiRequest(url, token, "POST", data, this.env);
 
           if (result.error) {
             return {
@@ -1227,7 +1274,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/schema/${field_name}`;
           
-          const result = await makeApiRequest(url, token, "DELETE");
+          const result = await makeApiRequest(url, token, "DELETE", undefined, this.env);
           
           // Handle successful DELETE operations (which may return null)
           if (result === null || (typeof result === 'object' && Object.keys(result).length === 0)) {
@@ -1321,7 +1368,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           if (per_page !== undefined) params.append('per_page', per_page.toString());
           
           const url = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -1378,7 +1425,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/${formatId(record_id)}`;
-          const result = await makeApiRequest(url, token);
+          const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
             return {
@@ -1442,7 +1489,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content`;
-          const result = await makeApiRequest(url, token, "POST", record_data);
+          const result = await makeApiRequest(url, token, "POST", record_data, this.env);
 
           if (result.error) {
             return {
@@ -1521,7 +1568,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         try {
           const metaApi = getMetaApiUrl(instance_name);
           const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content/${formatId(record_id)}`;
-          const result = await makeApiRequest(url, token, "PUT", record_data);
+          const result = await makeApiRequest(url, token, "PUT", record_data, this.env);
 
           if (result.error) {
             return {
@@ -1579,7 +1626,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           console.log(`Deleting record: ${record_id} from table ${table_id}`);
           
-          const result = await makeApiRequest(url, token, "DELETE");
+          const result = await makeApiRequest(url, token, "DELETE", undefined, this.env);
 
           // Handle response including null/empty responses which are common for DELETE operations
           if (result && result.error) {
@@ -1651,7 +1698,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             allow_id_field: allow_id_field || false
           };
           
-          const result = await makeApiRequest(url, token, "POST", data);
+          const result = await makeApiRequest(url, token, "POST", data, this.env);
           console.log("Bulk create response:", JSON.stringify(result));
 
           // Handle Xano's specific bulk operation response format
@@ -1838,7 +1885,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           console.log("Bulk update request URL:", url);
           console.log("Bulk update request data:", JSON.stringify(data));
           
-          const result = await makeApiRequest(url, token, "POST", data);
+          const result = await makeApiRequest(url, token, "POST", data, this.env);
           console.log("Bulk update response:", JSON.stringify(result));
 
           // Handle Xano's specific bulk update response format
@@ -1991,4 +2038,5 @@ export interface Env {
   OAUTH_KV: KVNamespace;
   XANO_BASE_URL: string;
   COOKIE_ENCRYPTION_KEY: string;
+  OAUTH_TOKEN_TTL?: string; // Optional TTL in seconds, defaults to 24 hours
 }
