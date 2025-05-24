@@ -34,13 +34,6 @@
         "binding": "USAGE_QUEUE",
         "queue": "usage-queue"
       }
-    ],
-    "consumers": [
-      {
-        "queue": "usage-queue",
-        "max_batch_size": 100,
-        "max_batch_timeout": 30
-      }
     ]
   },
   "vars": {

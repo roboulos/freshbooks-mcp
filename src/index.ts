@@ -2032,10 +2032,18 @@ export default new OAuthProvider({
   }
 });
 
+// Queue consumer handler for usage logging (to be implemented separately)
+// export async function queue(batch: MessageBatch, env: Env): Promise<void> {
+//   const { processUsageBatch } = await import('./queue-consumer');
+//   await processUsageBatch(batch, env);
+// }
+
 // Environment type
 export interface Env {
   MCP_OBJECT: DurableObjectNamespace;
   OAUTH_KV: KVNamespace;
+  SESSION_CACHE: KVNamespace;
+  USAGE_QUEUE: Queue;
   XANO_BASE_URL: string;
   COOKIE_ENCRYPTION_KEY: string;
   OAUTH_TOKEN_TTL?: string; // Optional TTL in seconds, defaults to 24 hours
