@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import { createMCPAuthMiddleware, type MCPAuthMiddleware, type AuthenticatedEnv } from '../mcp-auth-middleware'
+import { createMCPAuthMiddleware, MCPAuthMiddleware, type AuthenticatedEnv } from '../mcp-auth-middleware'
+import { XanoAuthService } from '../auth-service'
+import { ServiceAuthFactory } from '../service-auth-factory'
 
 // Mock types for MCP
 interface MCPRequest {
@@ -37,8 +39,13 @@ describe('MCP Authentication Integration', () => {
         get: vi.fn(),
         put: vi.fn()
       },
+      USAGE_QUEUE: {
+        send: vi.fn()
+      },
       XANO_API_KEY: 'test-worker-api-key',
-      XANO_INSTANCE: 'xnwv-v1z6-dvnr'
+      XANO_INSTANCE: 'xnwv-v1z6-dvnr',
+      XANO_BASE_URL: 'https://test.xano.io',
+      XANO_API_ENDPOINT: '/api:test'
     }
     
     global.fetch = vi.fn()
@@ -105,7 +112,7 @@ describe('MCP Authentication Integration', () => {
 
       // Assert
       expect(result.authenticated).toBe(false)
-      expect(result.error).toBe('Missing Authorization header')
+      expect(result.error).toBe('Missing API key')
     })
 
     it('should cache successful authentications', async () => {
@@ -164,7 +171,8 @@ describe('MCP Authentication Integration', () => {
         'xano_list_databases',
         mockTool,
         'session-123',
-        'user-123'
+        'user-123',
+        mockEnv
       )
 
       // Act
@@ -178,74 +186,83 @@ describe('MCP Authentication Integration', () => {
     it('should log successful tool usage', async () => {
       // Arrange
       const mockTool = vi.fn().mockResolvedValue({ success: true })
-      const logSpy = vi.spyOn(middleware, 'logUsage')
       
       const wrappedTool = middleware.wrapToolCall(
         'xano_list_tables',
         mockTool,
         'session-123',
-        'user-123'
+        'user-123',
+        mockEnv
       )
 
       // Act
       await wrappedTool({ database_id: 5 })
 
-      // Assert
-      expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({
-        sessionId: 'session-123',
-        userId: 'user-123',
-        toolName: 'xano_list_tables',
-        params: { database_id: 5 },
-        result: { success: true },
-        duration: expect.any(Number)
-      }))
+      // Assert - Check that usage was queued
+      expect(mockEnv.USAGE_QUEUE.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('xano_list_tables')
+        })
+      )
     })
 
     it('should log tool errors without blocking response', async () => {
       // Arrange
       const mockError = new Error('Tool failed')
       const mockTool = vi.fn().mockRejectedValue(mockError)
-      const logSpy = vi.spyOn(middleware, 'logUsage')
       
       const wrappedTool = middleware.wrapToolCall(
         'xano_create_table',
         mockTool,
         'session-123',
-        'user-123'
+        'user-123',
+        mockEnv
       )
 
       // Act & Assert
       await expect(wrappedTool({ name: 'test' })).rejects.toThrow('Tool failed')
       
       // Logging should still happen
-      expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({
-        error: mockError.message
-      }))
+      expect(mockEnv.USAGE_QUEUE.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('Tool failed')
+        })
+      )
     })
   })
 
   describe('Async Usage Logging', () => {
     it('should queue usage logs for batch processing', async () => {
       // Arrange
-      const usageData = {
-        sessionId: 'session-123',
-        userId: 'user-123',
-        toolName: 'xano_list_databases',
-        params: { instance_name: 'test' },
-        result: { success: true, data: [] },
-        duration: 150
-      }
+      const mockTool = vi.fn().mockResolvedValue({ success: true })
+      
+      const wrappedTool = middleware.wrapToolCall(
+        'xano_list_databases',
+        mockTool,
+        'session-123',
+        'user-123',
+        mockEnv
+      )
 
       // Act
-      await middleware.logUsage(usageData)
+      await wrappedTool({ instance_name: 'test' })
 
-      // Assert - Should be queued, not sent immediately
+      // Assert - Should be queued via USAGE_QUEUE
       expect(global.fetch).not.toHaveBeenCalled()
-      expect(mockEnv.KV.put).toHaveBeenCalledWith(
-        expect.stringContaining('usage:queue:'),
-        expect.stringContaining('session-123'),
-        expect.any(Object)
+      expect(mockEnv.USAGE_QUEUE.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.any(String)
+        })
       )
+      
+      // Verify the body contains expected data
+      const call = mockEnv.USAGE_QUEUE.send.mock.calls[0][0]
+      const body = JSON.parse(call.body)
+      expect(body).toMatchObject({
+        sessionId: 'session-123',
+        userId: 'user-123',
+        toolName: 'xano_list_databases'
+      })
     })
 
     it('should not block on logging failures', async () => {
@@ -288,6 +305,7 @@ describe('MCP Authentication Integration', () => {
       const result = await middleware.authenticate(mockRequest, mockEnv)
 
       // Assert
+      expect(result.authenticated).toBe(true)
       expect(result.sessionId).toMatch(/^session-\d+-[a-z0-9]+$/)
       expect(mockEnv.SESSION_CACHE.put).toHaveBeenCalledWith(
         expect.stringContaining(result.sessionId!),
@@ -370,7 +388,8 @@ describe('MCP Authentication Integration', () => {
         'xano_list_databases',
         mockToolHandler,
         authResult.sessionId!,
-        authResult.userId!
+        authResult.userId!,
+        mockEnv
       )
 
       const toolResult = await wrappedHandler({ instance_name: 'test' })
@@ -379,9 +398,12 @@ describe('MCP Authentication Integration', () => {
       expect(toolResult).toHaveProperty('databases')
       expect(mockToolHandler).toHaveBeenCalled()
       
-      // Verify usage logging was set up correctly
-      // (In the wrapped handler, logUsage is called internally)
-      expect(mockToolHandler).toHaveBeenCalledWith({ instance_name: 'test' })
+      // Verify usage was queued
+      expect(mockEnv.USAGE_QUEUE.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('xano_list_databases')
+        })
+      )
     })
   })
 })

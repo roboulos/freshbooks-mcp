@@ -284,5 +284,5 @@ export class MCPAuthMiddleware {
 
 // Export factory function
 export function createMCPAuthMiddleware(env: AuthenticatedEnv): MCPAuthMiddleware {
-  return new MCPAuthMiddleware(env)
+  return new MCPAuthMiddleware(undefined, undefined, env)
 }
