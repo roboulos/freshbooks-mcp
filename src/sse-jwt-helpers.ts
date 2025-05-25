@@ -155,11 +155,11 @@ export async function interceptSSEMessage(
     }
     
     if (!jwtToken) {
-      console.error('🔐 No JWT found anywhere! Blocking execution...');
+      console.error('🔐 No JWT found anywhere! Setting unauthenticated state...');
       // If we're authenticated but have no JWT, force re-auth
       await deleteAllAuthTokens(env);
       return {
-        shouldContinue: false,
+        shouldContinue: true, // Let tools handle the unauthenticated state
         error: 'No authentication token found. Please reconnect to re-authenticate.',
         updatedProps: {
           ...props,
@@ -178,9 +178,9 @@ export async function interceptSSEMessage(
       // Delete all auth tokens
       await deleteAllAuthTokens(env);
 
-      // Return error to block tool execution
+      // Don't block - just update props to unauthenticated
       return {
-        shouldContinue: false,
+        shouldContinue: true, // Let tools handle the unauthenticated state
         error: 'Authentication expired. Please reconnect to re-authenticate.',
         updatedProps: {
           ...props,

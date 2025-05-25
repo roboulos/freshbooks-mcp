@@ -32,21 +32,26 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       const { interceptSSEMessage } = await import('./sse-jwt-helpers');
       const result = await interceptSSEMessage(sessionId, request, this.props, this.env);
       
-      if (!result.shouldContinue) {
-        console.error("🚫 Tool execution blocked:", result.error);
-        return new Error(result.error || "Authentication required");
+      // Update props if they changed (including setting authenticated to false)
+      if (result.updatedProps !== this.props) {
+        console.log("🔄 Updating props with JWT check result:", {
+          wasAuthenticated: this.props?.authenticated,
+          nowAuthenticated: result.updatedProps?.authenticated
+        });
+        this.props = result.updatedProps;
       }
       
-      // Update props if they changed
-      if (result.updatedProps !== this.props) {
-        this.props = result.updatedProps;
+      // Don't block execution - let tools handle the unauthenticated state
+      if (!result.shouldContinue) {
+        console.warn("⚠️ JWT expired but allowing tool to execute with unauthenticated state");
       }
     } catch (error) {
       console.error("🔐 Error during SSE JWT interception:", error);
       // Continue on unexpected errors
     }
     
-    // Call the parent method to continue with normal tool execution
+    // Always call the parent method to continue with tool execution
+    // Tools will check this.props.authenticated and return appropriate errors
     return await super.onSSEMcpMessage(sessionId, request);
   }
   
