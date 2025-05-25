@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { checkAuthTokensInKV, interceptSSEMessage } from '../sse-jwt-helpers';
 
 /**
  * Tests for JWT validation during SSE message processing
@@ -133,7 +134,8 @@ describe('SSE Message JWT Interception', () => {
       // Mock successful auth/me
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        status: 200
+        status: 200,
+        statusText: 'OK'
       });
 
       const result = await interceptSSEMessage(
@@ -272,6 +274,13 @@ describe('SSE Message JWT Interception', () => {
         }
       }));
 
+      // Mock successful JWT validation
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK'
+      });
+
       const result = await interceptSSEMessage(
         'test-session', 
         mockRequest, 
@@ -291,19 +300,3 @@ describe('SSE Message JWT Interception', () => {
     });
   });
 });
-
-// Mock implementations that we'll build
-async function checkAuthTokensInKV(env: any, userId: string) {
-  // This will be implemented to check both xano_auth_token: and token: prefixes
-  throw new Error('Not implemented - TDD');
-}
-
-async function interceptSSEMessage(
-  sessionId: string, 
-  request: Request, 
-  props: any, 
-  env: any
-) {
-  // This will be the core logic for onSSEMcpMessage
-  throw new Error('Not implemented - TDD');
-}

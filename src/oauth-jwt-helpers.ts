@@ -53,15 +53,57 @@ export async function deleteAllAuthTokens(env: any): Promise<number> {
  * Returns unauthenticated props if JWT is expired to trigger OAuth
  */
 export async function enhancePropsWithJWTCheck(props: any, env: any): Promise<any> {
+  console.log("🔐 enhancePropsWithJWTCheck called with props:", {
+    authenticated: props?.authenticated,
+    userId: props?.userId,
+    hasApiKey: !!props?.apiKey
+  });
+  
   // Skip check for unauthenticated requests
   if (!props?.authenticated || !props?.userId) {
+    console.log("🔐 Skipping JWT check - not authenticated");
     return props;
   }
 
   try {
     // Look for auth token in KV
+    console.log("🔐 Looking for xano_auth_token entries...");
     const authEntries = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+    console.log("🔐 Found xano_auth_token entries:", authEntries.keys?.length || 0);
+    
     if (!authEntries.keys || authEntries.keys.length === 0) {
+      console.log("🔐 No xano_auth_token entries found - checking for token: entries");
+      const tokenEntries = await env.OAUTH_KV.list({ prefix: 'token:' });
+      console.log("🔐 Found token: entries:", tokenEntries.keys?.length || 0);
+      
+      if (!tokenEntries.keys || tokenEntries.keys.length === 0) {
+        console.log("🔐 No auth tokens found at all - skipping JWT check");
+        return props;
+      }
+      
+      // Try to use token: entries for JWT checking
+      console.log("🔐 Trying to use token: entries for JWT check");
+      for (const key of tokenEntries.keys) {
+        const tokenDataStr = await env.OAUTH_KV.get(key.name);
+        if (tokenDataStr) {
+          const tokenData = JSON.parse(tokenDataStr);
+          if (tokenData.userId === props.userId && tokenData.accessToken) {
+            console.log("🔐 Found JWT in token: entry, checking validity...");
+            const isValid = await checkJWTValidity(tokenData.accessToken, env.XANO_BASE_URL);
+            
+            if (!isValid) {
+              console.log("🔐 JWT expired - deleting all tokens to force re-authentication");
+              await deleteAllAuthTokens(env);
+              return { authenticated: false };
+            }
+            
+            console.log("🔐 JWT is still valid");
+            return props;
+          }
+        }
+      }
+      
+      console.log("🔐 No usable tokens found");
       return props;
     }
 

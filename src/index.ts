@@ -23,8 +23,39 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
   
   private middleware?: MCPAuthMiddleware;
   
+  // Override onSSEMcpMessage to intercept ALL tool executions
+  async onSSEMcpMessage(sessionId: string, request: Request): Promise<Error | null> {
+    console.log("🔍 onSSEMcpMessage intercepted! SessionId:", sessionId);
+    
+    // Check JWT validity before processing any tool calls
+    if (this.props?.authenticated && this.props?.userId) {
+      console.log("🔐 Checking JWT validity before tool execution...");
+      try {
+        const { enhancePropsWithJWTCheck } = await import('./oauth-jwt-helpers');
+        const enhancedProps = await enhancePropsWithJWTCheck(this.props, this.env);
+        
+        if (!enhancedProps.authenticated) {
+          console.error("🔐 JWT expired! Tool execution blocked until re-authentication");
+          // Return an error to stop tool execution
+          return new Error("Authentication expired. Please reconnect to re-authenticate.");
+        }
+        
+        // Update props with enhanced data
+        this.props = enhancedProps;
+      } catch (error) {
+        console.error("🔐 Error during JWT check:", error);
+        // Continue on network errors
+      }
+    }
+    
+    // Call the parent method to continue with normal tool execution
+    return await super.onSSEMcpMessage(sessionId, request);
+  }
+  
   // Override the onNewRequest method to handle requests with authentication refresh
   async onNewRequest(req: Request, env: Env): Promise<[Request, XanoAuthProps, unknown]> {
+    console.log("🔍 onNewRequest called!");
+    
     // First call the parent method to get the default props
     const [request, props, ctx] = await super.onNewRequest(req, env);
     
@@ -32,6 +63,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     const url = new URL(request.url);
     const sessionIdFromUrl = url.searchParams.get('sessionId');
     
+    console.log("🔍 About to check JWT validity...");
     // Check JWT validity and enhance props
     const enhancedProps = await enhancePropsWithJWTCheck(props, env);
     
@@ -40,6 +72,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       ...enhancedProps,
       sessionId: sessionIdFromUrl
     };
+    
+    console.log("🔍 onNewRequest returning with props:", {
+      authenticated: finalProps.authenticated,
+      hasApiKey: !!finalProps.apiKey,
+      sessionId: finalProps.sessionId
+    });
     
     return [request, finalProps, ctx];
   }
@@ -58,6 +96,28 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         if (authDataStr) {
           const authData = JSON.parse(authDataStr);
           if (authData.userId === this.props.userId && authData.apiKey) {
+            
+            // CRITICAL: Check JWT validity when getting fresh API key
+            if (authData.authToken) {
+              console.log("🔐 Checking JWT validity during API key fetch...");
+              try {
+                const { checkJWTValidity, deleteAllAuthTokens } = await import('./oauth-jwt-helpers');
+                const isValid = await checkJWTValidity(authData.authToken, this.env.XANO_BASE_URL);
+                
+                if (!isValid) {
+                  console.error("🔐 JWT expired! Deleting all tokens to force re-authentication...");
+                  await deleteAllAuthTokens(this.env);
+                  // Return null to trigger auth error in tools
+                  return null;
+                }
+                
+                console.log("🔐 JWT is still valid");
+              } catch (jwtError) {
+                console.error("🔐 Error checking JWT validity:", jwtError);
+                // Continue with existing API key on network errors
+              }
+            }
+            
             console.log("Using fresh API key from KV storage");
             return authData.apiKey;
           }
