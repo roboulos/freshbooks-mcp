@@ -7,6 +7,8 @@ import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
 import { refreshUserProfile } from "./refresh-profile";
 import { MCPAuthMiddleware } from "./mcp-auth-middleware";
 import { logUsage } from "./usage-logger";
+import { getSessionInfoFromProps, getSessionInfoWithKVFallback, logToolUsageWithRealSession } from "./real-worker-session";
+import { getActiveWorkerSessions, disableWorkerSession, enableWorkerSession } from "./session-control";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
@@ -25,6 +27,10 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     // First call the parent method to get the default props
     const [request, props, ctx] = await super.onNewRequest(req, env);
     
+    // CRITICAL: Extract sessionId from URL parameters
+    const url = new URL(request.url);
+    const sessionIdFromUrl = url.searchParams.get('sessionId');
+    
     // Log the props we receive to better understand what's available
     console.log("PROPS IN ON_NEW_REQUEST:", {
       authenticated: props?.authenticated,
@@ -33,6 +39,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       hasApiKey: !!props?.apiKey,
       apiKeyLength: props?.apiKey ? props.apiKey.length : 0,
       userId: props?.userId,
+      sessionIdFromUrl: sessionIdFromUrl,
       propKeys: props ? Object.keys(props) : []
     });
     
@@ -47,13 +54,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           if (authDataStr) {
             const authData = JSON.parse(authDataStr);
             if (authData.userId === props.userId && authData.apiKey) {
-              // Update props with fresh API key from KV
+              // Update props with fresh API key from KV AND session ID from URL
               const freshProps = {
                 ...props,
                 apiKey: authData.apiKey,
-                lastRefreshed: authData.lastRefreshed
+                lastRefreshed: authData.lastRefreshed,
+                sessionId: sessionIdFromUrl  // Add the real session ID from URL
               };
-              console.log("Updated props with fresh API key from KV");
+              console.log("Updated props with fresh API key from KV and session ID from URL");
               return [request, freshProps, ctx];
             }
           }
@@ -126,35 +134,54 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return this.props?.apiKey || null;
   }
 
-  private getSessionInfo(): { sessionId: string; userId: string } | null {
-    if (!this.props?.authenticated || !this.props?.userId) {
-      return null;
+  private async getSessionInfo(request?: Request): Promise<{ sessionId: string; userId: string } | null> {
+    // Use our new TDD-validated KV storage session ID logic with fallbacks
+    if (request) {
+      return await getSessionInfoWithKVFallback({
+        authenticated: this.props?.authenticated,
+        userId: this.props?.userId,
+        sessionId: this.props?.sessionId,
+        apiKey: this.props?.apiKey
+      }, request, this.env);
     }
     
-    // Generate a session ID if not available
-    const sessionId = this.props.sessionId || `session-${this.props.userId}-${Date.now()}`;
-    const userId = this.props.userId;
-    
-    return { sessionId, userId };
+    // Fallback to props-only logic if no request available
+    return getSessionInfoFromProps({
+      authenticated: this.props?.authenticated,
+      userId: this.props?.userId,
+      sessionId: this.props?.sessionId
+    });
   }
 
-  private logToolCall(toolName: string): void {
-    const sessionInfo = this.getSessionInfo();
+  private async logToolCall(toolName: string, request?: Request): Promise<void> {
+    const sessionInfo = await this.getSessionInfo(request);
     if (sessionInfo) {
-      logUsage('tool_executed', {
-        userId: sessionInfo.userId,
-        sessionId: sessionInfo.sessionId,
-        details: { tool: toolName },
-        env: this.env
-      });
+      // Use our new TDD-validated real Worker session logging
+      try {
+        await logToolUsageWithRealSession({
+          sessionId: sessionInfo.sessionId,  // Real Worker session ID from KV or URL
+          userId: sessionInfo.userId,
+          toolName: toolName,
+          params: { tool: toolName },
+          result: {},
+          duration: 0
+        }, this.env);
+        console.log(`✅ Logged tool usage: ${toolName} with session: ${sessionInfo.sessionId}`);
+      } catch (error) {
+        console.warn('Real session logging failed:', error.message);
+      }
+    } else {
+      console.warn(`⚠️ No real Worker session ID available for tool: ${toolName} - skipping logging`);
     }
   }
 
 
   private wrapWithUsageLogging(toolName: string, handler: Function): Function {
     return async (...args: any[]) => {
-      // Simple logging at the start
-      this.logToolCall(toolName);
+      // Log tool usage with KV session retrieval (fire and forget)
+      this.logToolCall(toolName).catch(error => {
+        console.warn(`Failed to log usage for ${toolName}:`, error.message);
+      });
       
       // Execute the original handler
       return await handler(...args);
@@ -178,7 +205,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           apiKeyLength: this.props?.apiKey ? this.props.apiKey.length : 0
         });
 
-        const sessionInfo = this.getSessionInfo();
+        const sessionInfo = await this.getSessionInfo();
 
         return {
           content: [{
@@ -386,6 +413,110 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }, null, 2)
           }]
         };
+      }
+    );
+
+    // Session control tools - test our new TDD implementation
+    this.server.tool(
+      "debug_session_info",
+      {},
+      async () => {
+        const sessionInfo = await this.getSessionInfo();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: !!sessionInfo,
+              sessionInfo: sessionInfo,
+              rawProps: {
+                authenticated: this.props?.authenticated,
+                userId: this.props?.userId,
+                sessionId: this.props?.sessionId,
+                hasSessionId: !!this.props?.sessionId
+              },
+              message: sessionInfo 
+                ? "✅ Real Worker session ID found and extracted" 
+                : "❌ No real Worker session ID available (TDD logic working correctly)"
+            }, null, 2)
+          }]
+        };
+      }
+    );
+
+    this.server.tool(
+      "debug_list_active_sessions",
+      {},
+      async () => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        try {
+          const result = await getActiveWorkerSessions(this.env);
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: result.success,
+                sessionCount: result.sessions?.length || 0,
+                sessions: result.sessions,
+                error: result.error
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: `Error listing sessions: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    this.server.tool(
+      "debug_test_session_control",
+      {
+        action: z.enum(['disable', 'enable']).describe("Action to test"),
+        sessionId: z.string().describe("Session ID to control")
+      },
+      async ({ action, sessionId }) => {
+        // Check authentication
+        if (!this.props?.authenticated) {
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
+        }
+
+        try {
+          const result = action === 'disable' 
+            ? await disableWorkerSession(sessionId, this.env)
+            : await enableWorkerSession(sessionId, this.env);
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                action: action,
+                sessionId: sessionId,
+                success: result.success,
+                sessionEnabled: result.sessionEnabled,
+                error: result.error
+              }, null, 2)
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: `Error ${action}ing session: ${error.message}`
+            }]
+          };
+        }
       }
     );
 
