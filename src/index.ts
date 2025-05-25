@@ -27,25 +27,23 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
   async onSSEMcpMessage(sessionId: string, request: Request): Promise<Error | null> {
     console.log("🔍 onSSEMcpMessage intercepted! SessionId:", sessionId);
     
-    // Check JWT validity before processing any tool calls
-    if (this.props?.authenticated && this.props?.userId) {
-      console.log("🔐 Checking JWT validity before tool execution...");
-      try {
-        const { enhancePropsWithJWTCheck } = await import('./oauth-jwt-helpers');
-        const enhancedProps = await enhancePropsWithJWTCheck(this.props, this.env);
-        
-        if (!enhancedProps.authenticated) {
-          console.error("🔐 JWT expired! Tool execution blocked until re-authentication");
-          // Return an error to stop tool execution
-          return new Error("Authentication expired. Please reconnect to re-authenticate.");
-        }
-        
-        // Update props with enhanced data
-        this.props = enhancedProps;
-      } catch (error) {
-        console.error("🔐 Error during JWT check:", error);
-        // Continue on network errors
+    // Use our new SSE JWT interception logic
+    try {
+      const { interceptSSEMessage } = await import('./sse-jwt-helpers');
+      const result = await interceptSSEMessage(sessionId, request, this.props, this.env);
+      
+      if (!result.shouldContinue) {
+        console.error("🚫 Tool execution blocked:", result.error);
+        return new Error(result.error || "Authentication required");
       }
+      
+      // Update props if they changed
+      if (result.updatedProps !== this.props) {
+        this.props = result.updatedProps;
+      }
+    } catch (error) {
+      console.error("🔐 Error during SSE JWT interception:", error);
+      // Continue on unexpected errors
     }
     
     // Call the parent method to continue with normal tool execution
