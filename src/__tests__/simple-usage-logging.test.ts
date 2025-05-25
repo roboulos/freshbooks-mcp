@@ -36,13 +36,13 @@ describe('General Usage Logging', () => {
 
     // Should call Xano usage logging endpoint
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://test.xano.io/api:Snappy/usage_logs',
+      'https://test.xano.io/api:q3EJkKDR/usage_logs',
       expect.objectContaining({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: expect.stringContaining('tool_executed')
+        body: expect.stringContaining('xano_list_instances')
       })
     );
   });
