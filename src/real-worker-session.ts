@@ -10,6 +10,7 @@ export interface SessionProps {
   authenticated?: boolean
   userId?: string
   sessionId?: string
+  apiKey?: string
 }
 
 export interface SessionInfo {
@@ -42,6 +43,131 @@ export interface LogData {
 export interface LogResult {
   success: boolean
   error?: string
+}
+
+/**
+ * Retrieve session info from KV storage using API key
+ * This is the primary method since KV storage persists through Worker hibernation
+ */
+export async function getSessionInfoFromKV(apiKey: string, env: any): Promise<SessionInfo | null> {
+  try {
+    // Look up session mapping using apikey:${apiKey} pattern
+    const kvKey = `apikey:${apiKey}`;
+    const storedData = await env.SESSION_CACHE.get(kvKey);
+    
+    if (!storedData) {
+      console.log(`No session data found in KV for API key: ${apiKey}`);
+      return null;
+    }
+    
+    // Parse stored session data
+    const sessionData = JSON.parse(storedData);
+    
+    if (!sessionData.sessionId || !sessionData.userId) {
+      console.warn('Invalid session data structure in KV:', sessionData);
+      return null;
+    }
+    
+    return {
+      sessionId: sessionData.sessionId,
+      userId: sessionData.userId
+    };
+  } catch (error) {
+    console.warn('Failed to retrieve session from KV storage:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Get session info with KV storage as primary source and URL as fallback
+ * This is the recommended approach for production use
+ */
+export async function getSessionInfoWithKVFallback(
+  props: SessionProps, 
+  request: Request, 
+  env: any
+): Promise<SessionInfo | null> {
+  // Must be authenticated and have userId
+  if (!props?.authenticated || !props?.userId) {
+    return null;
+  }
+  
+  // Priority 1: Use props.sessionId if available (direct Durable Object session ID)
+  if (props.sessionId) {
+    return {
+      sessionId: props.sessionId,
+      userId: props.userId
+    };
+  }
+  
+  // Priority 2: Look up from KV storage using API key
+  if (props.apiKey) {
+    const kvSessionInfo = await getSessionInfoFromKV(props.apiKey, env);
+    if (kvSessionInfo) {
+      console.log(`Retrieved session from KV: ${kvSessionInfo.sessionId}`);
+      return kvSessionInfo;
+    }
+  }
+  
+  // Priority 3: Fallback to URL sessionId
+  const urlSessionId = extractSessionIdFromRequest(request);
+  if (urlSessionId) {
+    console.log(`Using session from URL fallback: ${urlSessionId}`);
+    return {
+      sessionId: urlSessionId,
+      userId: props.userId
+    };
+  }
+  
+  // No session ID available anywhere - refuse to generate fake one
+  console.error("No real Worker session ID available from KV, URL, or props - refusing to generate fake ID");
+  return null;
+}
+
+/**
+ * Extract session ID from HTTP request URL parameters
+ */
+export function extractSessionIdFromRequest(request: Request): string | null {
+  try {
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get('sessionId');
+    return sessionId || null;
+  } catch (error) {
+    console.warn('Failed to extract session ID from request URL:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Get session info with fallback from props to URL
+ * Prioritizes props.sessionId over URL sessionId
+ */
+export function getSessionInfoWithFallback(props: SessionProps, request: Request): SessionInfo | null {
+  // Must be authenticated and have userId
+  if (!props?.authenticated || !props?.userId) {
+    return null;
+  }
+  
+  // Priority 1: Use props.sessionId if available (real Durable Object session ID)
+  if (props.sessionId) {
+    return {
+      sessionId: props.sessionId,
+      userId: props.userId
+    };
+  }
+  
+  // Priority 2: Fallback to URL sessionId
+  const urlSessionId = extractSessionIdFromRequest(request);
+  if (urlSessionId) {
+    return {
+      sessionId: urlSessionId,
+      userId: props.userId
+    };
+  }
+  
+  // No session ID available anywhere - refuse to generate fake one
+  console.error("No real Worker session ID available - refusing to generate fake ID");
+  return null;
 }
 
 /**

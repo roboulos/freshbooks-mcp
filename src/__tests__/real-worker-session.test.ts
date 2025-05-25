@@ -8,6 +8,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { 
   getSessionInfoFromProps,
+  extractSessionIdFromRequest,
+  getSessionInfoWithFallback,
+  getSessionInfoFromKV,
+  getSessionInfoWithKVFallback,
   registerWorkerSession,
   updateWorkerSessionActivity,
   logToolUsageWithRealSession,
@@ -23,6 +27,11 @@ import {
 const mockEnv = {
   XANO_BASE_URL: 'https://xnwv-v1z6-dvnr.n7c.xano.io',
   OAUTH_KV: {
+    get: vi.fn(),
+    put: vi.fn(),
+    list: vi.fn()
+  },
+  SESSION_CACHE: {
     get: vi.fn(),
     put: vi.fn(),
     list: vi.fn()
@@ -50,6 +59,58 @@ describe('Real Worker Session ID Handling (TDD)', () => {
       
       expect(result).toEqual({
         sessionId: 'worker-session-abc-def-ghi',
+        userId: 'user-123'
+      })
+    })
+
+    it('should extract session ID from URL when props.sessionId is missing', () => {
+      // EXPECTED BEHAVIOR: Extract sessionId from URL parameter when props.sessionId is undefined
+      const mockRequest = new Request('https://example.com/sse/message?sessionId=url-session-xyz-123')
+      
+      const result = extractSessionIdFromRequest(mockRequest)
+      
+      expect(result).toBe('url-session-xyz-123')
+    })
+
+    it('should return null when no session ID in URL or props', () => {
+      // EXPECTED BEHAVIOR: Return null when no session ID available anywhere
+      const mockRequest = new Request('https://example.com/sse/message')
+      
+      const result = extractSessionIdFromRequest(mockRequest)
+      
+      expect(result).toBeNull()
+    })
+
+    it('should prioritize props.sessionId over URL sessionId', () => {
+      // EXPECTED BEHAVIOR: Props sessionId takes precedence over URL sessionId
+      const mockProps = {
+        authenticated: true,
+        userId: 'user-123',
+        sessionId: 'props-session-priority'
+      }
+      const mockRequest = new Request('https://example.com/sse/message?sessionId=url-session-secondary')
+      
+      const result = getSessionInfoWithFallback(mockProps, mockRequest)
+      
+      expect(result).toEqual({
+        sessionId: 'props-session-priority',
+        userId: 'user-123'
+      })
+    })
+
+    it('should fallback to URL sessionId when props.sessionId is missing', () => {
+      // EXPECTED BEHAVIOR: Use URL sessionId when props.sessionId is undefined
+      const mockProps = {
+        authenticated: true,
+        userId: 'user-123'
+        // sessionId missing from props
+      }
+      const mockRequest = new Request('https://example.com/sse/message?sessionId=url-fallback-session')
+      
+      const result = getSessionInfoWithFallback(mockProps, mockRequest)
+      
+      expect(result).toEqual({
+        sessionId: 'url-fallback-session',
         userId: 'user-123'
       })
     })
@@ -87,6 +148,120 @@ describe('Real Worker Session ID Handling (TDD)', () => {
       }
 
       const result = getSessionInfoFromProps(mockProps)
+      
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('Session ID Retrieval from KV Storage', () => {
+    it('should retrieve session info from SESSION_CACHE using API key', async () => {
+      // EXPECTED BEHAVIOR: Look up sessionId from SESSION_CACHE using apiKey pattern
+      const mockApiKey = 'api-key-12345'
+      const mockSessionData = JSON.stringify({
+        sessionId: 'kv-stored-session-abc-123',
+        userId: 'user-456'
+      })
+      
+      const mockSessionCache = vi.mocked(mockEnv.SESSION_CACHE.get)
+      mockSessionCache.mockResolvedValueOnce(mockSessionData)
+      
+      const result = await getSessionInfoFromKV(mockApiKey, mockEnv)
+      
+      expect(result).toEqual({
+        sessionId: 'kv-stored-session-abc-123',
+        userId: 'user-456'
+      })
+      expect(mockSessionCache).toHaveBeenCalledWith(`apikey:${mockApiKey}`)
+    })
+
+    it('should return null when SESSION_CACHE has no data for API key', async () => {
+      // EXPECTED BEHAVIOR: Return null when no session mapping exists
+      const mockApiKey = 'unknown-api-key'
+      
+      const mockSessionCache = vi.mocked(mockEnv.SESSION_CACHE.get)
+      mockSessionCache.mockResolvedValueOnce(null)
+      
+      const result = await getSessionInfoFromKV(mockApiKey, mockEnv)
+      
+      expect(result).toBeNull()
+      expect(mockSessionCache).toHaveBeenCalledWith(`apikey:${mockApiKey}`)
+    })
+
+    it('should handle malformed JSON in SESSION_CACHE gracefully', async () => {
+      // EXPECTED BEHAVIOR: Return null when stored data is corrupted
+      const mockApiKey = 'api-key-with-bad-data'
+      
+      const mockSessionCache = vi.mocked(mockEnv.SESSION_CACHE.get)
+      mockSessionCache.mockResolvedValueOnce('invalid-json-data')
+      
+      const result = await getSessionInfoFromKV(mockApiKey, mockEnv)
+      
+      expect(result).toBeNull()
+    })
+
+    it('should use KV storage as primary source with URL fallback', async () => {
+      // EXPECTED BEHAVIOR: Prioritize KV storage over URL, fallback to URL if KV fails
+      const mockApiKey = 'api-key-primary'
+      const mockProps = {
+        authenticated: true,
+        userId: 'user-123',
+        apiKey: mockApiKey
+        // No sessionId in props
+      }
+      const mockRequest = new Request('https://example.com/sse/message?sessionId=url-backup-session')
+      
+      const mockSessionData = JSON.stringify({
+        sessionId: 'kv-primary-session-xyz',
+        userId: 'user-123'
+      })
+      
+      const mockSessionCache = vi.mocked(mockEnv.SESSION_CACHE.get)
+      mockSessionCache.mockResolvedValueOnce(mockSessionData)
+      
+      const result = await getSessionInfoWithKVFallback(mockProps, mockRequest, mockEnv)
+      
+      expect(result).toEqual({
+        sessionId: 'kv-primary-session-xyz',
+        userId: 'user-123'
+      })
+      expect(mockSessionCache).toHaveBeenCalledWith(`apikey:${mockApiKey}`)
+    })
+
+    it('should fallback to URL when KV storage has no session data', async () => {
+      // EXPECTED BEHAVIOR: Use URL sessionId when KV storage is empty
+      const mockApiKey = 'api-key-no-kv-data'
+      const mockProps = {
+        authenticated: true,
+        userId: 'user-123',
+        apiKey: mockApiKey
+      }
+      const mockRequest = new Request('https://example.com/sse/message?sessionId=url-fallback-session')
+      
+      const mockSessionCache = vi.mocked(mockEnv.SESSION_CACHE.get)
+      mockSessionCache.mockResolvedValueOnce(null) // No KV data
+      
+      const result = await getSessionInfoWithKVFallback(mockProps, mockRequest, mockEnv)
+      
+      expect(result).toEqual({
+        sessionId: 'url-fallback-session',
+        userId: 'user-123'
+      })
+    })
+
+    it('should return null when neither KV nor URL have session ID', async () => {
+      // EXPECTED BEHAVIOR: Return null when all retrieval methods fail
+      const mockApiKey = 'api-key-no-session-anywhere'
+      const mockProps = {
+        authenticated: true,
+        userId: 'user-123',
+        apiKey: mockApiKey
+      }
+      const mockRequest = new Request('https://example.com/sse/message') // No sessionId in URL
+      
+      const mockSessionCache = vi.mocked(mockEnv.SESSION_CACHE.get)
+      mockSessionCache.mockResolvedValueOnce(null) // No KV data
+      
+      const result = await getSessionInfoWithKVFallback(mockProps, mockRequest, mockEnv)
       
       expect(result).toBeNull()
     })
