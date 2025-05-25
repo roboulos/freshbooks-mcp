@@ -9,6 +9,7 @@ import { MCPAuthMiddleware } from "./mcp-auth-middleware";
 import { logUsage } from "./usage-logger";
 import { getSessionInfoFromProps, getSessionInfoWithKVFallback, logToolUsageWithRealSession } from "./real-worker-session";
 import { getActiveWorkerSessions, disableWorkerSession, enableWorkerSession } from "./session-control";
+import { enhancePropsWithJWTCheck, deleteAllAuthTokens } from "./oauth-jwt-helpers";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
@@ -27,70 +28,20 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     // First call the parent method to get the default props
     const [request, props, ctx] = await super.onNewRequest(req, env);
     
-    // CRITICAL: Extract sessionId from URL parameters
+    // Extract sessionId from URL parameters
     const url = new URL(request.url);
     const sessionIdFromUrl = url.searchParams.get('sessionId');
     
-    // Log the props we receive to better understand what's available
-    console.log("PROPS IN ON_NEW_REQUEST:", {
-      authenticated: props?.authenticated,
-      hasAccessToken: !!props?.accessToken,
-      accessTokenLength: props?.accessToken ? props.accessToken.length : 0,
-      hasApiKey: !!props?.apiKey,
-      apiKeyLength: props?.apiKey ? props.apiKey.length : 0,
-      userId: props?.userId,
-      sessionIdFromUrl: sessionIdFromUrl,
-      propKeys: props ? Object.keys(props) : []
-    });
+    // Check JWT validity and enhance props
+    const enhancedProps = await enhancePropsWithJWTCheck(props, env);
     
-    // If we're authenticated, check KV for the latest API key
-    if (props?.authenticated && props?.userId) {
-      try {
-        // Look for the latest auth data in KV storage
-        const authEntries = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
-        
-        if (authEntries.keys && authEntries.keys.length > 0) {
-          const authDataStr = await env.OAUTH_KV.get(authEntries.keys[0].name);
-          if (authDataStr) {
-            const authData = JSON.parse(authDataStr);
-            if (authData.userId === props.userId && authData.apiKey) {
-              // Update props with fresh API key from KV AND session ID from URL
-              const freshProps = {
-                ...props,
-                apiKey: authData.apiKey,
-                lastRefreshed: authData.lastRefreshed,
-                sessionId: sessionIdFromUrl  // Add the real session ID from URL
-              };
-              console.log("Updated props with fresh API key from KV and session ID from URL");
-              return [request, freshProps, ctx];
-            }
-          }
-        }
-        
-        // Fallback: try token: prefix entries
-        const tokenEntries = await env.OAUTH_KV.list({ prefix: 'token:' });
-        for (const key of tokenEntries.keys || []) {
-          const tokenDataStr = await env.OAUTH_KV.get(key.name);
-          if (tokenDataStr) {
-            const tokenData = JSON.parse(tokenDataStr);
-            if (tokenData.userId === props.userId && tokenData.apiKey) {
-              const freshProps = {
-                ...props,
-                apiKey: tokenData.apiKey,
-                lastRefreshed: tokenData.lastRefreshed
-              };
-              console.log("Updated props with fresh API key from token KV");
-              return [request, freshProps, ctx];
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching fresh API key from KV:", error);
-        // Continue with original props if KV lookup fails
-      }
-    }
+    // Add sessionId from URL
+    const finalProps = {
+      ...enhancedProps,
+      sessionId: sessionIdFromUrl
+    };
     
-    return [request, props, ctx];
+    return [request, finalProps, ctx];
   }
 
   async getFreshApiKey(): Promise<string | null> {
@@ -297,34 +248,35 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             };
           }
           
-          // List all token entries and manually expire them
-          const tokenEntries = await this.env.OAUTH_KV.list({ prefix: 'token:' });
-          const expiredCount = tokenEntries.keys?.length || 0;
+          // Get counts before deletion for detailed response
+          const tokenEntriesBefore = await this.env.OAUTH_KV.list({ prefix: 'token:' });
+          const xanoAuthEntriesBefore = await this.env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+          const refreshEntriesBefore = await this.env.OAUTH_KV.list({ prefix: 'refresh:' });
           
-          for (const key of tokenEntries.keys || []) {
-            // Set expiration to 60 seconds from now (minimum allowed by Cloudflare KV)
-            const tokenData = await this.env.OAUTH_KV.get(key.name);
-            if (tokenData) {
-              await this.env.OAUTH_KV.put(key.name, tokenData, { expirationTtl: 60 });
-            }
-          }
+          // Use our clean helper to delete all tokens
+          const deletedCount = await deleteAllAuthTokens(this.env);
           
           return {
             content: [{
               type: "text",
               text: JSON.stringify({
                 success: true,
-                message: `Manually expired ${expiredCount} OAuth tokens`,
-                note: "Tokens will expire in 60 seconds. Wait 1 minute, then try another MCP tool call to trigger OAuth re-authentication"
+                message: `Deleted ${deletedCount} authentication tokens`,
+                note: "All tokens have been deleted. The next tool call will trigger OAuth re-authentication. You may need to refresh your MCP client or restart the connection.",
+                deleted: {
+                  oauth_tokens: tokenEntriesBefore.keys?.length || 0,
+                  xano_auth_tokens: xanoAuthEntriesBefore.keys?.length || 0,
+                  refresh_tokens: refreshEntriesBefore.keys?.length || 0
+                }
               }, null, 2)
             }]
           };
         } catch (error) {
-          console.error("Error expiring OAuth tokens:", error);
+          console.error("Error deleting OAuth tokens:", error);
           return {
             content: [{
               type: "text",
-              text: `Error expiring OAuth tokens: ${error.message || "Unknown error"}`
+              text: `Error deleting OAuth tokens: ${error.message || "Unknown error"}`
             }]
           };
         }
