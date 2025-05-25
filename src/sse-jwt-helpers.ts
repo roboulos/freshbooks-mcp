@@ -137,22 +137,40 @@ export async function interceptSSEMessage(
   }
 
   try {
-    // Look for JWT in KV storage
-    const tokenResult = await checkAuthTokensInKV(env, props.userId);
+    // First check if we have an API key in props (this is the JWT!)
+    let jwtToken: string | null = null;
     
-    if (!tokenResult.found) {
-      console.log('🔍 No JWT found in KV storage for user:', props.userId);
+    // The JWT is stored as apiKey in props!
+    if (props.apiKey) {
+      console.log('🔍 Found JWT in props.apiKey, checking validity...');
+      jwtToken = props.apiKey;
+    } else {
+      // Fallback to checking KV storage
+      const tokenResult = await checkAuthTokensInKV(env, props.userId);
+      
+      if (tokenResult.found) {
+        console.log(`🔍 Found JWT in ${tokenResult.source} storage, checking validity...`);
+        jwtToken = tokenResult.authToken;
+      }
+    }
+    
+    if (!jwtToken) {
+      console.error('🔐 No JWT found anywhere! Blocking execution...');
+      // If we're authenticated but have no JWT, force re-auth
+      await deleteAllAuthTokens(env);
       return {
-        shouldContinue: true,
-        error: null,
-        updatedProps: props
+        shouldContinue: false,
+        error: 'No authentication token found. Please reconnect to re-authenticate.',
+        updatedProps: {
+          ...props,
+          authenticated: false,
+          apiKey: null
+        }
       };
     }
 
-    console.log(`🔍 Found JWT in ${tokenResult.source} storage, checking validity...`);
-
-    // Check if JWT is still valid
-    const isValid = await checkJWTWithXano(tokenResult.authToken!, env.XANO_BASE_URL);
+    // Check if JWT is still valid with Xano
+    const isValid = await checkJWTWithXano(jwtToken, env.XANO_BASE_URL);
 
     if (!isValid) {
       console.error('🔐 JWT expired! Clearing tokens and blocking execution...');
