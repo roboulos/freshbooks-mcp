@@ -2090,11 +2090,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_files",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of files per page (default: 50)")
           },
-          async ({ workspace_id, page = 1, per_page = 50 }) => {
+          async ({ instance_name, workspace_id, page = 1, per_page = 50 }) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2112,7 +2113,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 per_page: per_page.toString()
               });
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/file?${params}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/file?${params}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2196,7 +2198,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 formData.append('folder', folder);
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/file`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/file`;
           
               // Make request with FormData
               const response = await fetch(url, {
@@ -2231,10 +2234,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_file",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             file_id: z.union([z.string(), z.number()]).describe("The ID of the file to delete")
           },
-          async ({ workspace_id, file_id }) => {
+          async ({ instance_name, workspace_id, file_id }) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2247,7 +2251,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/file/${formatId(file_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/file/${formatId(file_id)}`;
               const result = await makeApiRequest(url, token, "DELETE", null, this.env);
 
               return {
@@ -2271,9 +2276,10 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_workspace_branches",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace")
           },
-          async ({ workspace_id }) => {
+          async ({ instance_name, workspace_id }) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2286,7 +2292,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/branch`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/branch`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2305,10 +2312,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_workspace_branch",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch_name: z.string().describe("The name of the branch to delete")
           },
-          async ({ workspace_id, branch_name }) => {
+          async ({ instance_name, workspace_id, branch_name }) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2321,7 +2329,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/branch/${encodeURIComponent(branch_name)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/branch/${encodeURIComponent(branch_name)}`;
               const result = await makeApiRequest(url, token, "DELETE", null, this.env);
 
               return {
@@ -2340,11 +2349,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_browse_api_groups",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of items per page (default: 50)")
           },
-          async ({ workspace_id, page = 1, per_page = 50 }) => {
+          async ({ instance_name, workspace_id, page = 1, per_page = 50 }) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2362,7 +2372,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 per_page: per_page.toString()
               });
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup?${params}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup?${params}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2420,7 +2431,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 ...(tag && tag.length > 0 && { tag })
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -2439,6 +2451,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_api_group",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group")
           },
@@ -2451,7 +2464,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               openWorldHint: true
             }
           },
-          async ({ workspace_id, api_group_id }) => {
+          async ({ instance_name, workspace_id, api_group_id }) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2464,7 +2477,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2511,7 +2525,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (swagger !== undefined) data.swagger = swagger;
               if (tag && tag.length > 0) data.tag = tag;
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
               const result = await makeApiRequest(url, token, "PUT", data, this.env);
 
               return {
@@ -2530,10 +2545,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_api_group",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group to delete")
           },
-          async ({ workspace_id, api_group_id }) => {
+          async ({instance_name, workspace_id, api_group_id}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2546,7 +2562,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
               const result = await makeApiRequest(url, token, "DELETE", null, this.env);
 
               return {
@@ -2570,12 +2587,13 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_browse_apis_in_group",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of items per page (default: 50)")
           },
-          async ({ workspace_id, api_group_id, page = 1, per_page = 50 }) => {
+          async ({instance_name, workspace_id, api_group_id, page = 1, per_page = 50}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2593,7 +2611,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 per_page: per_page.toString()
               });
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api?${params}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api?${params}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2643,7 +2662,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 ...(tag && tag.length > 0 && { tag })
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -2662,11 +2682,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_api",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API")
           },
-          async ({ workspace_id, api_group_id, api_id }) => {
+          async ({instance_name, workspace_id, api_group_id, api_id}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2679,7 +2700,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2729,7 +2751,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (docs) data.docs = docs;
               if (tag && tag.length > 0) data.tag = tag;
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
               const result = await makeApiRequest(url, token, "PUT", data, this.env);
 
               return {
@@ -2748,11 +2771,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_api",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API to delete")
           },
-          async ({ workspace_id, api_group_id, api_id }) => {
+          async ({instance_name, workspace_id, api_group_id, api_id}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2765,7 +2789,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
               const result = await makeApiRequest(url, token, "DELETE", null, this.env);
 
               return {
@@ -2789,10 +2814,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_export_workspace",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             include_data: z.boolean().optional().describe("Whether to include table data in export (default: false)")
           },
-          async ({ workspace_id, include_data = false }) => {
+          async ({instance_name, workspace_id, include_data = false}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2809,7 +2835,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 include_data
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/export`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/export`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -2834,11 +2861,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_export_workspace_schema",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name (leave empty for current live branch)"),
             password: z.string().optional().describe("Optional password to encrypt the export")
           },
-          async ({ workspace_id, branch, password }) => {
+          async ({instance_name, workspace_id, branch, password}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2856,7 +2884,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 password: password || ""
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/export-schema`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/export-schema`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -2881,13 +2910,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_browse_request_history",
           {
+            instance_name: z.string().describe("The name of the Xano instance"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of requests per page (default: 50)"),
             start_date: z.string().optional().describe("Start date filter (YYYY-MM-DD format)"),
             end_date: z.string().optional().describe("End date filter (YYYY-MM-DD format)")
           },
-          async ({ workspace_id, page = 1, per_page = 50, start_date, end_date }) => {
+          async ({instance_name, workspace_id, page = 1, per_page = 50, start_date, end_date}) => {
             if (!this.props?.authenticated) {
               return {
                 content: [{ type: "text", text: "Authentication required to use this tool." }]
@@ -2908,7 +2938,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (start_date) params.append('start_date', start_date);
               if (end_date) params.append('end_date', end_date);
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/request_history?${params}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/request_history?${params}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -2954,7 +2985,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/truncate`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/truncate`;
           
               // Truncate requires special x-data-source header
               const response = await fetch(url, {
@@ -3038,7 +3070,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/index/btree`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/index/btree`;
               const result = await makeApiRequest(url, token, "POST", { fields }, this.env);
 
               return {
@@ -3115,7 +3148,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (sort) params.append("sort", sort);
               if (order) params.append("order", order);
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function?${params.toString()}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/function?${params.toString()}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -3225,7 +3259,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 ...(branch && { branch })
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/function`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -3307,7 +3342,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const params = new URLSearchParams();
               if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}${params.toString() ? '?' + params.toString() : ''}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -3374,7 +3410,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}`;
               const result = await makeApiRequest(url, token, "DELETE", null, this.env);
 
               return {
@@ -3443,7 +3480,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/index/search`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/index/search`;
               const result = await makeApiRequest(url, token, "POST", { name, lang, fields }, this.env);
 
               return {
@@ -3552,7 +3590,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 script
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -3662,7 +3701,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 ...(branch && { branch })
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task`;
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
@@ -3754,7 +3794,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
               if (type) params.append("type", type);
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}${params.toString() ? '?' + params.toString() : ''}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -3835,7 +3876,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 script
               };
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
               const result = await makeApiRequest(url, token, "PUT", data, this.env);
 
               return {
@@ -3913,7 +3955,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (sort) params.append("sort", sort);
               if (order) params.append("order", order);
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task?${params.toString()}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task?${params.toString()}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -4000,7 +4043,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
               if (type) params.append("type", type);
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}${params.toString() ? '?' + params.toString() : ''}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -4073,7 +4117,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}`;
               const result = await makeApiRequest(url, token, "DELETE", null, this.env);
 
               return {
@@ -4135,7 +4180,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}/publish`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}/publish`;
               const result = await makeApiRequest(url, token, "POST", { type }, this.env);
 
               return {
@@ -4211,7 +4257,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}/publish`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}/publish`;
               const result = await makeApiRequest(url, token, "POST", { type }, this.env);
 
               return {
@@ -4287,7 +4334,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}/publish`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}/publish`;
               const result = await makeApiRequest(url, token, "POST", { type }, this.env);
 
               return {
@@ -4388,7 +4436,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}`;
               const result = await makeApiRequest(url, token, "PUT", { type, script }, this.env);
 
               return {
@@ -4494,7 +4543,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}`;
               const result = await makeApiRequest(url, token, "PUT", { type, script }, this.env);
 
               return {
@@ -4582,7 +4632,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}/activate`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}/activate`;
               const result = await makeApiRequest(url, token, "PUT", { active }, this.env);
 
               return {
@@ -4676,7 +4727,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               if (order) params.append("order", order);
               if (type) params.append("type", type);
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api?${params.toString()}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api?${params.toString()}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -4809,7 +4861,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/table`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/table`;
               const result = await makeApiRequest(url, token, "POST", { type, script }, this.env);
 
               return {
@@ -4906,7 +4959,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const params = new URLSearchParams();
               if (type) params.append("type", type);
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}${params.toString() ? '?' + params.toString() : ''}`;
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
@@ -4980,7 +5034,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 throw new Error("No API key available");
               }
 
-              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}`;
+              const metaApi = getMetaApiUrl(instance_name);
+              const url = `${metaApi}/beta/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}`;
               const result = await makeApiRequest(url, token, "PUT", { type, script }, this.env);
 
               return {
