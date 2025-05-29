@@ -89,27 +89,27 @@ async function checkJWTWithXano(authToken: string, baseUrl: string): Promise<boo
 }
 
 /**
- * Delete all auth-related tokens from KV storage
+ * Delete all auth-related tokens from KV storage for a specific user
  */
-async function deleteAllAuthTokens(env: any): Promise<void> {
-  // Delete xano_auth_token: entries
-  const xanoKeys = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+async function deleteAllAuthTokens(env: any, userId: string): Promise<void> {
+  // Delete xano_auth_token: entries for this user
+  const xanoKeys = await env.OAUTH_KV.list({ prefix: `xano_auth_token:${userId}` });
   if (xanoKeys.keys) {
     for (const key of xanoKeys.keys) {
       await env.OAUTH_KV.delete(key.name);
     }
   }
 
-  // Delete token: entries
-  const tokenKeys = await env.OAUTH_KV.list({ prefix: 'token:' });
+  // Delete token: entries for this user
+  const tokenKeys = await env.OAUTH_KV.list({ prefix: `token:${userId}` });
   if (tokenKeys.keys) {
     for (const key of tokenKeys.keys) {
       await env.OAUTH_KV.delete(key.name);
     }
   }
 
-  // Delete refresh: entries
-  const refreshKeys = await env.OAUTH_KV.list({ prefix: 'refresh:' });
+  // Delete refresh: entries for this user
+  const refreshKeys = await env.OAUTH_KV.list({ prefix: `refresh:${userId}` });
   if (refreshKeys.keys) {
     for (const key of refreshKeys.keys) {
       await env.OAUTH_KV.delete(key.name);
@@ -157,7 +157,7 @@ export async function interceptSSEMessage(
     if (!jwtToken) {
       console.error('🔐 No JWT found anywhere! Setting unauthenticated state...');
       // If we're authenticated but have no JWT, force re-auth
-      await deleteAllAuthTokens(env);
+      await deleteAllAuthTokens(env, props.userId);
       return {
         shouldContinue: true, // Let tools handle the unauthenticated state
         error: 'No authentication token found. Please reconnect to re-authenticate.',
@@ -175,8 +175,8 @@ export async function interceptSSEMessage(
     if (!isValid) {
       console.error('🔐 JWT expired! Clearing tokens and blocking execution...');
       
-      // Delete all auth tokens
-      await deleteAllAuthTokens(env);
+      // Delete all auth tokens for this user
+      await deleteAllAuthTokens(env, props.userId);
 
       // Don't block - just update props to unauthenticated
       return {

@@ -22,13 +22,13 @@ export async function checkJWTValidity(authToken: string, baseUrl: string): Prom
 }
 
 /**
- * Delete all authentication tokens from KV storage
+ * Delete all authentication tokens from KV storage for a specific user
  * This forces the OAuth flow to restart on the next request
  */
-export async function deleteAllAuthTokens(env: any): Promise<number> {
-  const tokenEntries = await env.OAUTH_KV.list({ prefix: 'token:' });
-  const xanoAuthEntries = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
-  const refreshEntries = await env.OAUTH_KV.list({ prefix: 'refresh:' });
+export async function deleteAllAuthTokens(env: any, userId: string): Promise<number> {
+  const tokenEntries = await env.OAUTH_KV.list({ prefix: `token:${userId}` });
+  const xanoAuthEntries = await env.OAUTH_KV.list({ prefix: `xano_auth_token:${userId}` });
+  const refreshEntries = await env.OAUTH_KV.list({ prefix: `refresh:${userId}` });
   
   let deletedCount = 0;
   
@@ -68,12 +68,12 @@ export async function enhancePropsWithJWTCheck(props: any, env: any): Promise<an
   try {
     // Look for auth token in KV
     console.log("🔐 Looking for xano_auth_token entries...");
-    const authEntries = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+    const authEntries = await env.OAUTH_KV.list({ prefix: `xano_auth_token:${props.userId}` });
     console.log("🔐 Found xano_auth_token entries:", authEntries.keys?.length || 0);
     
     if (!authEntries.keys || authEntries.keys.length === 0) {
       console.log("🔐 No xano_auth_token entries found - checking for token: entries");
-      const tokenEntries = await env.OAUTH_KV.list({ prefix: 'token:' });
+      const tokenEntries = await env.OAUTH_KV.list({ prefix: `token:${props.userId}` });
       console.log("🔐 Found token: entries:", tokenEntries.keys?.length || 0);
       
       if (!tokenEntries.keys || tokenEntries.keys.length === 0) {
@@ -93,7 +93,7 @@ export async function enhancePropsWithJWTCheck(props: any, env: any): Promise<an
             
             if (!isValid) {
               console.log("🔐 JWT expired - deleting all tokens to force re-authentication");
-              await deleteAllAuthTokens(env);
+              await deleteAllAuthTokens(env, props.userId);
               return { authenticated: false };
             }
             
@@ -122,8 +122,8 @@ export async function enhancePropsWithJWTCheck(props: any, env: any): Promise<an
     
     if (!isValid) {
       console.log("JWT expired - deleting all tokens to force re-authentication");
-      // JWT expired - delete all tokens
-      await deleteAllAuthTokens(env);
+      // JWT expired - delete all tokens for this user
+      await deleteAllAuthTokens(env, props.userId);
       // Return unauthenticated to trigger OAuth
       return { authenticated: false };
     }

@@ -4,8 +4,10 @@ import { fetchXanoUserInfo } from "./utils";
  * Refreshes the user profile by calling the auth/me endpoint and updating the KV storage
  * This function can be called during request handling to ensure the API key is fresh
  */
-export async function refreshUserProfile(env: any) {
+export async function refreshUserProfile(env: any, userId?: string) {
   try {
+    // TODO: This function should require userId parameter to properly scope KV queries
+    // Currently it searches across ALL users which is a security risk
     // Get the KV binding and base URL
     const OAUTH_KV = env.OAUTH_KV;
     const baseUrl = env.XANO_BASE_URL || "https://xnwv-v1z6-dvnr.n7c.xano.io";

@@ -4,15 +4,94 @@ import { z } from "zod";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { XanoHandler } from "./xano-handler";
 import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
-import { refreshUserProfile } from "./refresh-profile";
-import { MCPAuthMiddleware } from "./mcp-auth-middleware";
-import { logUsage } from "./usage-logger";
-import { getSessionInfoFromProps, getSessionInfoWithKVFallback, logToolUsageWithRealSession } from "./real-worker-session";
-import { getActiveWorkerSessions, disableWorkerSession, enableWorkerSession } from "./session-control";
-import { enhancePropsWithJWTCheck, deleteAllAuthTokens } from "./oauth-jwt-helpers";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
+
+// Helper functions for session management
+async function deleteAllAuthTokens(env: Env): Promise<number> {
+  let deletedCount = 0;
+  
+  // Delete token: entries
+  const tokenEntries = await env.OAUTH_KV.list({ prefix: 'token:' });
+  for (const key of tokenEntries.keys || []) {
+    await env.OAUTH_KV.delete(key.name);
+    deletedCount++;
+  }
+  
+  // Delete xano_auth_token: entries
+  const xanoAuthEntries = await env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+  for (const key of xanoAuthEntries.keys || []) {
+    await env.OAUTH_KV.delete(key.name);
+    deletedCount++;
+  }
+  
+  // Delete refresh: entries
+  const refreshEntries = await env.OAUTH_KV.list({ prefix: 'refresh:' });
+  for (const key of refreshEntries.keys || []) {
+    await env.OAUTH_KV.delete(key.name);
+    deletedCount++;
+  }
+  
+  return deletedCount;
+}
+
+async function getActiveWorkerSessions(env: Env): Promise<{success: boolean, sessions?: any[], error?: string}> {
+  try {
+    const sessions = await env.OAUTH_KV.list({ prefix: 'session:' });
+    const sessionList = [];
+    
+    for (const key of sessions.keys || []) {
+      const sessionData = await env.OAUTH_KV.get(key.name);
+      if (sessionData) {
+        sessionList.push({
+          sessionId: key.name.replace('session:', ''),
+          data: JSON.parse(sessionData)
+        });
+      }
+    }
+    
+    return { success: true, sessions: sessionList };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+async function disableWorkerSession(sessionId: string, env: Env): Promise<{success: boolean, sessionEnabled?: boolean, error?: string}> {
+  try {
+    const sessionKey = `session:${sessionId}`;
+    const sessionData = await env.OAUTH_KV.get(sessionKey);
+    
+    if (sessionData) {
+      const data = JSON.parse(sessionData);
+      data.enabled = false;
+      await env.OAUTH_KV.put(sessionKey, JSON.stringify(data));
+      return { success: true, sessionEnabled: false };
+    }
+    
+    return { success: false, error: "Session not found" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+async function enableWorkerSession(sessionId: string, env: Env): Promise<{success: boolean, sessionEnabled?: boolean, error?: string}> {
+  try {
+    const sessionKey = `session:${sessionId}`;
+    const sessionData = await env.OAUTH_KV.get(sessionKey);
+    
+    if (sessionData) {
+      const data = JSON.parse(sessionData);
+      data.enabled = true;
+      await env.OAUTH_KV.put(sessionKey, JSON.stringify(data));
+      return { success: true, sessionEnabled: true };
+    }
+    
+    return { success: false, error: "Session not found" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
 
 // Define MCP agent for Xano
 export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
@@ -21,190 +100,16 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     version: "1.0.0",
   });
   
-  private middleware?: MCPAuthMiddleware;
   
-  // Override onSSEMcpMessage to intercept ALL tool executions
-  async onSSEMcpMessage(sessionId: string, request: Request): Promise<Error | null> {
-    console.log("🔍 onSSEMcpMessage intercepted! SessionId:", sessionId);
-    
-    // Use our new SSE JWT interception logic
-    try {
-      const { interceptSSEMessage } = await import('./sse-jwt-helpers');
-      const result = await interceptSSEMessage(sessionId, request, this.props, this.env);
-      
-      // Update props if they changed (including setting authenticated to false)
-      if (result.updatedProps !== this.props) {
-        console.log("🔄 Updating props with JWT check result:", {
-          wasAuthenticated: this.props?.authenticated,
-          nowAuthenticated: result.updatedProps?.authenticated
-        });
-        this.props = result.updatedProps;
-      }
-      
-      // Don't block execution - let tools handle the unauthenticated state
-      if (!result.shouldContinue) {
-        console.warn("⚠️ JWT expired but allowing tool to execute with unauthenticated state");
-      }
-    } catch (error) {
-      console.error("🔐 Error during SSE JWT interception:", error);
-      // Continue on unexpected errors
-    }
-    
-    // Always call the parent method to continue with tool execution
-    // Tools will check this.props.authenticated and return appropriate errors
-    return await super.onSSEMcpMessage(sessionId, request);
-  }
-  
-  // Override the onNewRequest method to handle requests with authentication refresh
-  async onNewRequest(req: Request, env: Env): Promise<[Request, XanoAuthProps, unknown]> {
-    console.log("🔍 onNewRequest called!");
-    
-    // First call the parent method to get the default props
-    const [request, props, ctx] = await super.onNewRequest(req, env);
-    
-    // Extract sessionId from URL parameters
-    const url = new URL(request.url);
-    const sessionIdFromUrl = url.searchParams.get('sessionId');
-    
-    console.log("🔍 About to check JWT validity...");
-    // Check JWT validity and enhance props
-    const enhancedProps = await enhancePropsWithJWTCheck(props, env);
-    
-    // Add sessionId from URL
-    const finalProps = {
-      ...enhancedProps,
-      sessionId: sessionIdFromUrl
-    };
-    
-    console.log("🔍 onNewRequest returning with props:", {
-      authenticated: finalProps.authenticated,
-      hasApiKey: !!finalProps.apiKey,
-      sessionId: finalProps.sessionId
-    });
-    
-    return [request, finalProps, ctx];
-  }
 
   async getFreshApiKey(): Promise<string | null> {
-    if (!this.props?.authenticated || !this.props?.userId) {
-      return this.props?.apiKey || null;
-    }
-
-    try {
-      // Look for the latest auth data in KV storage
-      const authEntries = await this.env.OAUTH_KV.list({ prefix: 'xano_auth_token:' });
-      
-      if (authEntries.keys && authEntries.keys.length > 0) {
-        const authDataStr = await this.env.OAUTH_KV.get(authEntries.keys[0].name);
-        if (authDataStr) {
-          const authData = JSON.parse(authDataStr);
-          if (authData.userId === this.props.userId && authData.apiKey) {
-            
-            // CRITICAL: Check JWT validity when getting fresh API key
-            if (authData.authToken) {
-              console.log("🔐 Checking JWT validity during API key fetch...");
-              try {
-                const { checkJWTValidity, deleteAllAuthTokens } = await import('./oauth-jwt-helpers');
-                const isValid = await checkJWTValidity(authData.authToken, this.env.XANO_BASE_URL);
-                
-                if (!isValid) {
-                  console.error("🔐 JWT expired! Deleting all tokens to force re-authentication...");
-                  await deleteAllAuthTokens(this.env);
-                  // Return null to trigger auth error in tools
-                  return null;
-                }
-                
-                console.log("🔐 JWT is still valid");
-              } catch (jwtError) {
-                console.error("🔐 Error checking JWT validity:", jwtError);
-                // Continue with existing API key on network errors
-              }
-            }
-            
-            console.log("Using fresh API key from KV storage");
-            return authData.apiKey;
-          }
-        }
-      }
-      
-      // Fallback: try token: prefix entries
-      const tokenEntries = await this.env.OAUTH_KV.list({ prefix: 'token:' });
-      for (const key of tokenEntries.keys || []) {
-        const tokenDataStr = await this.env.OAUTH_KV.get(key.name);
-        if (tokenDataStr) {
-          const tokenData = JSON.parse(tokenDataStr);
-          if (tokenData.userId === this.props.userId && tokenData.apiKey) {
-            console.log("Using fresh API key from token KV storage");
-            return tokenData.apiKey;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching fresh API key:", error);
-    }
-    
-    // Fallback to cached props if KV lookup fails
-    console.log("Falling back to cached API key from props");
+    // Simple approach - just use the API key from props
+    // When OAuth token expires, user will need to re-authenticate
     return this.props?.apiKey || null;
   }
 
-  private async getSessionInfo(request?: Request): Promise<{ sessionId: string; userId: string } | null> {
-    // Use our new TDD-validated KV storage session ID logic with fallbacks
-    if (request) {
-      return await getSessionInfoWithKVFallback({
-        authenticated: this.props?.authenticated,
-        userId: this.props?.userId,
-        sessionId: this.props?.sessionId,
-        apiKey: this.props?.apiKey
-      }, request, this.env);
-    }
-    
-    // Fallback to props-only logic if no request available
-    return getSessionInfoFromProps({
-      authenticated: this.props?.authenticated,
-      userId: this.props?.userId,
-      sessionId: this.props?.sessionId
-    });
-  }
-
-  private async logToolCall(toolName: string, request?: Request): Promise<void> {
-    const sessionInfo = await this.getSessionInfo(request);
-    if (sessionInfo) {
-      // Use our new TDD-validated real Worker session logging
-      try {
-        await logToolUsageWithRealSession({
-          sessionId: sessionInfo.sessionId,  // Real Worker session ID from KV or URL
-          userId: sessionInfo.userId,
-          toolName: toolName,
-          params: { tool: toolName },
-          result: {},
-          duration: 0
-        }, this.env);
-        console.log(`✅ Logged tool usage: ${toolName} with session: ${sessionInfo.sessionId}`);
-      } catch (error) {
-        console.warn('Real session logging failed:', error.message);
-      }
-    } else {
-      console.warn(`⚠️ No real Worker session ID available for tool: ${toolName} - skipping logging`);
-    }
-  }
-
-
-  private wrapWithUsageLogging(toolName: string, handler: Function): Function {
-    return async (...args: any[]) => {
-      // Log tool usage with KV session retrieval (fire and forget)
-      this.logToolCall(toolName).catch(error => {
-        console.warn(`Failed to log usage for ${toolName}:`, error.message);
-      });
-      
-      // Execute the original handler
-      return await handler(...args);
-    };
-  }
 
   async init() {
-    // Initialize middleware for usage logging
-    this.middleware = new MCPAuthMiddleware(undefined, undefined, this.env);
     
     // Debug tool to see what props are available
     this.server.tool(
@@ -219,8 +124,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           apiKeyLength: this.props?.apiKey ? this.props.apiKey.length : 0
         });
 
-        const sessionInfo = await this.getSessionInfo();
-
         return {
           content: [{
             type: "text",
@@ -232,10 +135,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               userId: this.props?.userId,
               name: this.props?.name,
               email: this.props?.email,
-              authenticated: this.props?.authenticated,
-              lastRefreshed: this.props?.lastRefreshed || "never",
-              sessionInfo: sessionInfo,
-              hasMiddleware: !!this.middleware
+              authenticated: this.props?.authenticated
             }, null, 2)
           }]
         };
@@ -255,46 +155,9 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
         }
         
-        try {
-          // Call the refresh function
-          const refreshResult = await refreshUserProfile(this.env);
-          
-          if (refreshResult.success) {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  success: true,
-                  message: "Profile refreshed successfully",
-                  profile: {
-                    apiKeyPrefix: refreshResult.profile.apiKey.substring(0, 20) + "...",
-                    userId: refreshResult.profile.userId,
-                    name: refreshResult.profile.name,
-                    email: refreshResult.profile.email
-                  }
-                }, null, 2)
-              }]
-            };
-          } else {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  success: false,
-                  error: refreshResult.error
-                }, null, 2)
-              }]
-            };
-          }
-        } catch (error) {
-          console.error("Error refreshing profile:", error);
-          return {
-            content: [{
-              type: "text",
-              text: `Error refreshing profile: ${error.message || "Unknown error"}`
-            }]
-          };
-        }
+        return {
+          content: [{ type: "text", text: "This functionality has been removed for simplicity." }]
+        };
       }
     );
     
@@ -557,7 +420,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_list_instances",
       {},
-      this.wrapWithUsageLogging("xano_list_instances", async () => {
+      async () => {
         // Check authentication
         console.log("xano_list_instances called", {
           authenticated: this.props?.authenticated,
@@ -604,7 +467,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }]
           };
         }
-      })
+      }
     );
 
     // Get instance details
@@ -613,7 +476,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       {
         instance_name: z.string().describe("The name of the Xano instance")
       },
-      this.wrapWithUsageLogging("xano_get_instance_details", async ({ instance_name }) => {
+      async ({ instance_name }) => {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
@@ -648,7 +511,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }]
           };
         }
-      })
+      }
     );
 
     // List databases
@@ -2188,6 +2051,2981 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         }
       }
     );
+    // ===========================
+    // ADDITIONAL XANO TOOLS
+    // ===========================
+    
+        this.server.tool(
+          "xano_auth_me",
+          {},
+          async () => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `https://app.xano.com/api:meta/auth/me`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_list_files",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Number of files per page (default: 50)")
+          },
+          async ({ workspace_id, page = 1, per_page = 50 }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/file?${params}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_upload_file",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            file_name: z.string().describe("Name of the file to upload"),
+            file_content: z.string().describe("Base64 encoded file content"),
+            folder: z.string().optional().describe("Folder path to upload to")
+          },
+          async ({ workspace_id, file_name, file_content, folder }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              // Convert base64 to blob
+              let fileBlob: Blob;
+              if (file_content.startsWith('data:')) {
+                // Handle data URL
+                const [header, base64] = file_content.split(',');
+                const binary = atob(base64);
+                const array = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                  array[i] = binary.charCodeAt(i);
+                }
+                const mimeMatch = header.match(/data:([^;]+)/);
+                const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+                fileBlob = new Blob([array], { type: mimeType });
+              } else {
+                // Assume it's already base64
+                const binary = atob(file_content);
+                const array = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                  array[i] = binary.charCodeAt(i);
+                }
+                fileBlob = new Blob([array], { type: 'application/octet-stream' });
+              }
+
+              // Create FormData
+              const formData = new FormData();
+              formData.append('content', fileBlob, file_name);
+          
+              // Detect file type from extension
+              const ext = file_name.split('.').pop()?.toLowerCase();
+              let fileType = '';
+              if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) {
+                fileType = 'image';
+              } else if (['mp4', 'mov', 'avi', 'webm'].includes(ext || '')) {
+                fileType = 'video';
+              } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext || '')) {
+                fileType = 'audio';
+              }
+          
+              if (fileType) {
+                formData.append('type', fileType);
+              }
+              formData.append('access', 'public');
+          
+              if (folder) {
+                formData.append('folder', folder);
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/file`;
+          
+              // Make request with FormData
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Accept': 'application/json'
+                },
+                body: formData
+              });
+
+              if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`HTTP ${response.status}: ${error}`);
+              }
+
+              const result = await response.json();
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_delete_file",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            file_id: z.union([z.string(), z.number()]).describe("The ID of the file to delete")
+          },
+          async ({ workspace_id, file_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/file/${formatId(file_id)}`;
+              const result = await makeApiRequest(url, token, "DELETE", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `File ${file_id} deleted successfully`,
+                  data: result,
+                  operation: "xano_delete_file"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_list_workspace_branches",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace")
+          },
+          async ({ workspace_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/branch`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_delete_workspace_branch",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch_name: z.string().describe("The name of the branch to delete")
+          },
+          async ({ workspace_id, branch_name }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/branch/${encodeURIComponent(branch_name)}`;
+              const result = await makeApiRequest(url, token, "DELETE", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_browse_api_groups",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Number of items per page (default: 50)")
+          },
+          async ({ workspace_id, page = 1, per_page = 50 }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup?${params}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_api_group",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch: z.string().optional().describe("Branch name"),
+            name: z.string().describe("The name of the new API group"),
+            description: z.string().optional().describe("Description of the API group"),
+            docs: z.string().optional().describe("Documentation"),
+            swagger: z.boolean().optional().describe("Enable swagger"),
+            tag: z.array(z.string()).optional().describe("Tags for the API group")
+          },
+          {
+            annotations: {
+              title: "Create API Group",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: true
+            }
+          },
+          async ({ workspace_id, branch, name, description, docs, swagger, tag }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                ...(branch && { branch }),
+                name,
+                ...(description && { description }),
+                ...(docs && { docs }),
+                ...(swagger !== undefined && { swagger }),
+                ...(tag && tag.length > 0 && { tag })
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_get_api_group",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group")
+          },
+          {
+            annotations: {
+              title: "Get API Group",
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ workspace_id, api_group_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_update_api_group",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            name: z.string().optional().describe("New name for the API group"),
+            description: z.string().optional().describe("New description for the API group"),
+            docs: z.string().optional().describe("Documentation"),
+            swagger: z.boolean().optional().describe("Enable swagger"),
+            tag: z.array(z.string()).optional().describe("Tags")
+          },
+          async ({ workspace_id, api_group_id, name, description, docs, swagger, tag }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data: any = {};
+              if (name) data.name = name;
+              if (description) data.description = description;
+              if (docs) data.docs = docs;
+              if (swagger !== undefined) data.swagger = swagger;
+              if (tag && tag.length > 0) data.tag = tag;
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
+              const result = await makeApiRequest(url, token, "PUT", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_delete_api_group",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group to delete")
+          },
+          async ({ workspace_id, api_group_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}`;
+              const result = await makeApiRequest(url, token, "DELETE", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `API group ${api_group_id} deleted successfully`,
+                  data: result,
+                  operation: "xano_delete_api_group"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_browse_apis_in_group",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Number of items per page (default: 50)")
+          },
+          async ({ workspace_id, api_group_id, page = 1, per_page = 50 }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api?${params}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_api",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            name: z.string().describe("The name of the new API"),
+            description: z.string().optional().describe("Description of the API"),
+            verb: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).describe("HTTP verb for the API"),
+            path: z.string().optional().describe("URL path for the API endpoint"),
+            docs: z.string().optional().describe("Documentation"),
+            tag: z.array(z.string()).optional().describe("Tags")
+          },
+          async ({ workspace_id, api_group_id, name, description, verb, path, docs, tag }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                name,
+                verb,
+                ...(description && { description }),
+                ...(path && { path }),
+                ...(docs && { docs }),
+                ...(tag && tag.length > 0 && { tag })
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_get_api",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            api_id: z.union([z.string(), z.number()]).describe("The ID of the API")
+          },
+          async ({ workspace_id, api_group_id, api_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_update_api",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            api_id: z.union([z.string(), z.number()]).describe("The ID of the API"),
+            name: z.string().optional().describe("New name for the API"),
+            description: z.string().optional().describe("New description for the API"),
+            verb: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().describe("New HTTP verb"),
+            path: z.string().optional().describe("New URL path"),
+            docs: z.string().optional().describe("Documentation"),
+            tag: z.array(z.string()).optional().describe("Tags")
+          },
+          async ({ workspace_id, api_group_id, api_id, name, description, verb, path, docs, tag }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data: any = {};
+              if (name) data.name = name;
+              if (description) data.description = description;
+              if (verb) data.verb = verb;
+              if (path) data.path = path;
+              if (docs) data.docs = docs;
+              if (tag && tag.length > 0) data.tag = tag;
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const result = await makeApiRequest(url, token, "PUT", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_delete_api",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            api_id: z.union([z.string(), z.number()]).describe("The ID of the API to delete")
+          },
+          async ({ workspace_id, api_group_id, api_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const result = await makeApiRequest(url, token, "DELETE", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `API ${api_id} deleted successfully from group ${api_group_id}`,
+                  data: result,
+                  operation: "xano_delete_api"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_export_workspace",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            include_data: z.boolean().optional().describe("Whether to include table data in export (default: false)")
+          },
+          async ({ workspace_id, include_data = false }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                include_data
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/export`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "Workspace export completed successfully",
+                  data: result,
+                  operation: "xano_export_workspace",
+                  note: "Export may include download URL and file information. If include_data was true, table data is included."
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_export_workspace_schema",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch: z.string().optional().describe("Branch name (leave empty for current live branch)"),
+            password: z.string().optional().describe("Optional password to encrypt the export")
+          },
+          async ({ workspace_id, branch, password }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                branch: branch || "",
+                password: password || ""
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/export-schema`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "Schema export completed successfully",
+                  data: result,
+                  operation: "xano_export_workspace_schema",
+                  note: "Export data may include download URL or file information depending on Xano's response"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_browse_request_history",
+          {
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Number of requests per page (default: 50)"),
+            start_date: z.string().optional().describe("Start date filter (YYYY-MM-DD format)"),
+            end_date: z.string().optional().describe("End date filter (YYYY-MM-DD format)")
+          },
+          async ({ workspace_id, page = 1, per_page = 50, start_date, end_date }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+
+              if (start_date) params.append('start_date', start_date);
+              if (end_date) params.append('end_date', end_date);
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/request_history?${params}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                content: [{ type: "text", text: `Error: ${error.message}` }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_truncate_table",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
+            reset: z.boolean().optional().describe("Whether to reset the primary key sequence (default: false)")
+          },
+          {
+            annotations: {
+              title: "Truncate Table",
+              readOnlyHint: false,    // This modifies data
+              destructiveHint: true,  // This destroys all data in the table
+              idempotentHint: true,   // Truncating an empty table has no effect
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, table_id, reset = false }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/truncate`;
+          
+              // Truncate requires special x-data-source header
+              const response = await fetch(url, {
+                method: "DELETE",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  "x-data-source": "live"  // Required header for truncate
+                },
+                body: JSON.stringify({ reset })
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error: ${response.status} - ${errorText}`);
+              }
+
+              const result = response.status === 204 ? {} : await response.json();
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: {
+                    message: `Table ${table_id} truncated successfully`,
+                    reset_primary_key: reset
+                  },
+                  operation: "xano_truncate_table"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error truncating table: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_truncate_table"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_btree_index",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
+            fields: z.array(z.object({
+              name: z.string().describe("Field name to index"),
+              op: z.enum(["asc", "desc"]).optional().describe("Sort order (default: asc)")
+            })).describe("List of fields to create the index on")
+          },
+          {
+            annotations: {
+              title: "Create BTree Index",
+              readOnlyHint: false,    // This creates an index
+              destructiveHint: false, // Doesn't destroy data
+              idempotentHint: false,  // Creating same index twice would fail
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, table_id, fields }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/index/btree`;
+              const result = await makeApiRequest(url, token, "POST", { fields }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_create_btree_index"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error creating BTree index: ${error.message}`,
+                      code: error.response?.code || "EXCEPTION"
+                    },
+                    operation: "xano_create_btree_index"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_list_functions",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch: z.string().optional().describe("Branch name"),
+            include_draft: z.boolean().optional().describe("Include draft functions"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Items per page (default: 50)"),
+            search: z.string().optional().describe("Search term"),
+            sort: z.enum(["created_at", "updated_at", "name"]).optional().describe("Sort by field"),
+            order: z.enum(["asc", "desc"]).optional().describe("Sort order")
+          },
+          {
+            annotations: {
+              title: "List Functions",
+              readOnlyHint: true,     // This is read-only
+              destructiveHint: false, // Doesn't destroy data
+              idempotentHint: true,   // Same query returns same results
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, branch, include_draft, page = 1, per_page = 50, search, sort, order }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+          
+              if (branch) params.append("branch", branch);
+              if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
+              if (search) params.append("search", search);
+              if (sort) params.append("sort", sort);
+              if (order) params.append("order", order);
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function?${params.toString()}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_list_functions",
+                  quick_reference: {
+                    create_new: "Use xano_create_function with type='xs' and XanoScript",
+                    view_code: "Use xano_get_function_details to see full XanoScript",
+                    common_patterns: {
+                      validation: "precondition ($input.field != \"\") { error = \"Required\" }",
+                      api_call: "api.request { url = \"...\" method = \"POST\" } as $result",
+                      response: "response { value = $result.response.data }"
+                    },
+                    field_types: ["email", "text", "int", "bool", "decimal", "timestamp"],
+                    tips: [
+                      "Functions are serverless - no database access in beta",
+                      "Use api.request for all external integrations",
+                      "Variables use $ prefix: $input.fieldname, $varname"
+                    ]
+                  }
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error listing functions: ${error.message}`,
+                      code: error.response?.code || "EXCEPTION"
+                    },
+                    operation: "xano_list_functions"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_function",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch: z.string().optional().describe("Branch name"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Function type - always use 'xs' for XanoScript"),
+            script: z.string().describe(`Complete XanoScript function code. Example working syntax:
+    function my_function {
+      description = "Function description"
+      input {
+        email email_field {
+          description = "Email to validate"
+        }
+        text name_field {
+          description = "User name"
+        }
+      }
+      stack {
+        precondition ($input.email_field != "") {
+          error = "Email is required"
+        }
+    
+        api.request {
+          url = "https://api.example.com/validate"
+          method = "POST"
+          params = {}|set:"email":$input.email_field
+          headers = []|push:"Authorization: Bearer token"
+          description = "Validate email"
+        } as $api_response
+      }
+      response {
+        value = $api_response.response.result
+      }
+    }`)
+          },
+          {
+            annotations: {
+              title: "Create Function",
+              readOnlyHint: false,    // This creates a function
+              destructiveHint: false, // Doesn't destroy data
+              idempotentHint: false,  // Creating same function twice would fail
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, branch, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                type,
+                script,
+                ...(branch && { branch })
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_create_function",
+                  tips: [
+                    "Functions use 'function name { }' syntax",
+                    "Input fields: email, text, int, bool, decimal, timestamp",
+                    "Use precondition for validation",
+                    "Use api.request for external calls",
+                    "Variables assigned with 'as $varname'",
+                    "Response must be in response { value = ... } block"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error creating function: ${error.message}`,
+                      code: error.response?.code || "EXCEPTION"
+                    },
+                    operation: "xano_create_function",
+                    syntax_help: {
+                      correct_structure: "function name { description = \"desc\" input { } stack { } response { } }",
+                      common_mistakes: [
+                        "Using 'api' instead of 'function' keyword",
+                        "Missing response block",
+                        "Using // for comments (not supported)",
+                        "Wrong input field types"
+                      ],
+                      tip: "Use xano_get_function_details on an existing function to see working syntax"
+                    }
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_get_function_details",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            function_id: z.union([z.string(), z.number()]).describe("The ID of the function"),
+            include_draft: z.boolean().optional().describe("Include draft version")
+          },
+          {
+            annotations: {
+              title: "Get Function Details",
+              readOnlyHint: true,     // This is read-only
+              destructiveHint: false, // Doesn't destroy data
+              idempotentHint: true,   // Same query returns same results
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, function_id, include_draft }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams();
+              if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_get_function_details",
+                  analysis_tip: "Study the 'script' field to understand XanoScript patterns",
+                  learning_points: [
+                    "Note the function structure and blocks used",
+                    "See how input fields are defined",
+                    "Observe api.request syntax for external calls",
+                    "Check response block format"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error getting function details: ${error.message}`,
+                      code: error.response?.code || "EXCEPTION"
+                    },
+                    operation: "xano_get_function_details"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_delete_function",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            function_id: z.union([z.string(), z.number()]).describe("The ID of the function to delete")
+          },
+          {
+            annotations: {
+              title: "Delete Function",
+              readOnlyHint: false,    // This deletes a function
+              destructiveHint: true,  // This destroys the function
+              idempotentHint: true,   // Deleting non-existent function has no effect
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, function_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}`;
+              const result = await makeApiRequest(url, token, "DELETE", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: {
+                    message: `Function ${function_id} deleted successfully`,
+                    response: result
+                  },
+                  operation: "xano_delete_function"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error deleting function: ${error.message}`,
+                      code: error.response?.code || "EXCEPTION"
+                    },
+                    operation: "xano_delete_function"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_search_index",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
+            name: z.string().describe("Name for the search index"),
+            fields: z.array(z.object({
+              name: z.string().describe("Field name"),
+              priority: z.number().optional().default(1).describe("Search priority (default: 1)")
+            })).describe("List of fields to create the search index on"),
+            lang: z.enum(["english", "spanish", "french", "german", "italian", "portuguese", "russian", "chinese", "japanese", "korean"]).optional().default("english").describe("Language for text analysis (default: english)")
+          },
+          {
+            annotations: {
+              title: "Create Search Index",
+              readOnlyHint: false,    // This creates an index
+              destructiveHint: false, // Doesn't destroy data
+              idempotentHint: false,  // Creating same index twice would fail
+              openWorldHint: true     // Interacts with external Xano API
+            }
+          },
+          async ({ instance_name, workspace_id, table_id, name, fields, lang = "english" }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/index/search`;
+              const result = await makeApiRequest(url, token, "POST", { name, lang, fields }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_create_search_index"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error creating search index: ${error.message}`,
+                      code: error.response?.code || "EXCEPTION"
+                    },
+                    operation: "xano_create_search_index"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_api_with_logic",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            type: z.enum(["xs", "yaml", "json"]).default("xs").describe("Script type - always use 'xs' for XanoScript"),
+            script: z.string().describe(`Complete XanoScript API endpoint code. Example working syntax:
+    query create_user verb=POST {
+      input {
+        email email_address {
+          description = "User's email address"
+        }
+        text first_name {
+          description = "User's first name"
+        }
+        text password {
+          description = "User's password"
+        }
+      }
+  
+      stack {
+        precondition ($input.email_address != "") {
+          error = "Email is required"
+        }
+    
+        precondition ($input.password != "") {
+          error = "Password is required"
+        }
+    
+        api.request {
+          url = "https://api.example.com/validate-email"
+          method = "POST"
+          params = {}|set:"email":$input.email_address
+          headers = []|push:"Content-Type: application/json"
+          description = "Validate email format"
+        } as $validation
+      }
+  
+      response {
+        value = {
+          success: true,
+          email: $input.email_address,
+          name: $input.first_name,
+          validated: $validation.response.status == 200
+        }
+      }
+    }
+
+    IMPORTANT: Use 'query' keyword for APIs, not 'function'. Specify verb=GET/POST/PUT/DELETE.`)
+          },
+          {
+            annotations: {
+              title: "Create API with Full Logic",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, api_group_id, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                type,
+                script
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "API endpoint created successfully with full XanoScript logic",
+                  data: result,
+                  operation: "xano_create_api_with_logic",
+                  endpoint_url: result.endpoint ? `${instance_name}.xano.io${result.endpoint}` : "Check API group for endpoint URL",
+                  tips: [
+                    "APIs use 'query name verb=METHOD { }' syntax",
+                    "Available verbs: GET, POST, PUT, DELETE, PATCH",
+                    "Input parameters become API parameters/body",
+                    "Use sprintf for string formatting: \"%s %s\"|sprintf:$var1:$var2",
+                    "Response block returns JSON to API caller"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error creating API with logic: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_create_api_with_logic",
+                    syntax_help: {
+                      correct_structure: "query endpoint_name verb=POST { input { } stack { } response { } }",
+                      common_mistakes: [
+                        "Using 'function' instead of 'query' keyword",
+                        "Missing verb specification (verb=GET/POST/PUT/DELETE)",
+                        "Invalid JSON in response block",
+                        "Using database operations (not supported in beta)"
+                      ],
+                      tip: "Use xano_get_api_with_logic on existing API to see working syntax"
+                    }
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_task",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch: z.string().optional().describe("Branch name"),
+            type: z.enum(["xs", "yaml", "json"]).default("xs").describe("Script type - always use 'xs' for XanoScript"),
+            script: z.string().describe(`Complete XanoScript background task code. Example working syntax:
+    task "health_check_task" {
+      active = true
+      history = {limit: 50, inherit: true}
+  
+      stack {
+        api.request {
+          url = "https://api.example.com/health"
+          method = "GET"
+          headers = []
+          description = "Check API health"
+        } as $health_check
+    
+        precondition ($health_check.response.status == 200) {
+          error = "Health check failed"
+        }
+      }
+  
+      schedule {
+        events = []  // Add cron expressions here like "0 */5 * * *" for every 5 minutes
+      }
+    }
+
+    IMPORTANT: Tasks use 'task "name"' format with quoted name. Must include active, history, and schedule blocks.`)
+          },
+          {
+            annotations: {
+              title: "Create Background Task",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, branch, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                type,
+                script,
+                ...(branch && { branch })
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task`;
+              const result = await makeApiRequest(url, token, "POST", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "Background task created successfully with full XanoScript logic",
+                  data: result,
+                  operation: "xano_create_task",
+                  tips: [
+                    "Tasks use 'task \"name\" { }' syntax with quoted name",
+                    "Required blocks: active, history, schedule",
+                    "Schedule events use cron expressions: \"0 */5 * * *\" = every 5 min",
+                    "No input or response blocks (tasks run in background)",
+                    "Use api.request for external integrations",
+                    "active = true to enable, false to disable"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error creating task: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_create_task",
+                    syntax_help: {
+                      correct_structure: "task \"task_name\" { active = true history = {limit: 50, inherit: true} stack { } schedule { events = [] } }",
+                      common_mistakes: [
+                        "Missing quotes around task name",
+                        "Missing required blocks: active, history, schedule",
+                        "Using input/response blocks (tasks don't have these)",
+                        "Invalid cron expression in schedule.events"
+                      ],
+                      cron_examples: [
+                        "\"0 * * * *\" = Every hour",
+                        "\"0 0 * * *\" = Daily at midnight",
+                        "\"0 0 * * 0\" = Weekly on Sunday",
+                        "\"*/15 * * * *\" = Every 15 minutes"
+                      ],
+                      tip: "Use xano_get_task_details on existing task to see working syntax"
+                    }
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_get_api_with_logic",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            api_id: z.union([z.string(), z.number()]).describe("The ID of the API"),
+            include_draft: z.boolean().optional().describe("Include draft version"),
+            type: z.enum(["xs", "yaml", "json"]).optional().describe("Format to retrieve the logic in")
+          },
+          {
+            annotations: {
+              title: "Get API Details with Logic",
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, api_group_id, api_id, include_draft, type }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams();
+              if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
+              if (type) params.append("type", type);
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_get_api_with_logic",
+                  analysis_tip: "Study the 'script' field to learn API patterns",
+                  key_differences_from_functions: [
+                    "Uses 'query' keyword instead of 'function'",
+                    "Requires verb=GET/POST/PUT/DELETE",
+                    "Input becomes API parameters/body",
+                    "Response is returned as JSON to caller"
+                  ],
+                  learning_points: [
+                    "Note the query structure with verb",
+                    "See how HTTP inputs are handled",
+                    "Observe validation patterns",
+                    "Check JSON response formatting"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error getting API with logic: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_get_api_with_logic"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_update_api_with_logic",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            api_id: z.union([z.string(), z.number()]).describe("The ID of the API to update"),
+            type: z.enum(["xs", "yaml", "json"]).default("xs").describe("Script type - use 'xs' for XanoScript"),
+            script: z.string().describe("Updated XanoScript code for the API")
+          },
+          {
+            annotations: {
+              title: "Update API Logic",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, api_group_id, api_id, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const data = {
+                type,
+                script
+              };
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}`;
+              const result = await makeApiRequest(url, token, "PUT", data, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "API logic updated successfully",
+                  data: result,
+                  operation: "xano_update_api_with_logic"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error updating API logic: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_update_api_with_logic"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_list_tasks",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            branch: z.string().optional().describe("Branch name"),
+            include_draft: z.boolean().optional().describe("Include draft tasks"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Items per page (default: 50)"),
+            search: z.string().optional().describe("Search term"),
+            sort: z.enum(["created_at", "updated_at", "name"]).optional().describe("Sort by field"),
+            order: z.enum(["asc", "desc"]).optional().describe("Sort order")
+          },
+          {
+            annotations: {
+              title: "List Background Tasks",
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, branch, include_draft, page = 1, per_page = 50, search, sort, order }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+          
+              if (branch) params.append("branch", branch);
+              if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
+              if (search) params.append("search", search);
+              if (sort) params.append("sort", sort);
+              if (order) params.append("order", order);
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task?${params.toString()}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_list_tasks",
+                  quick_reference: {
+                    create_new: "Use xano_create_task with type='xs' and XanoScript",
+                    view_code: "Use xano_get_task_details to see full XanoScript",
+                    task_structure: {
+                      required: "task \"name\" { active = bool, history = {...}, stack { }, schedule { } }",
+                      no_input_output: "Tasks don't have input or response blocks",
+                      scheduling: "Use cron expressions in schedule.events array"
+                    },
+                    cron_patterns: {
+                      "every_5_min": "*/5 * * * *",
+                      "hourly": "0 * * * *",
+                      "daily_midnight": "0 0 * * *",
+                      "weekly_sunday": "0 0 * * 0",
+                      "monthly_first": "0 0 1 * *"
+                    },
+                    tips: [
+                      "Tasks run in background - no user interaction",
+                      "Use for scheduled jobs, monitoring, cleanup",
+                      "api.request for external integrations only"
+                    ]
+                  }
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error listing tasks: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_list_tasks"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_get_task_details",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            task_id: z.union([z.string(), z.number()]).describe("The ID of the task"),
+            include_draft: z.boolean().optional().describe("Include draft version"),
+            type: z.enum(["xs", "yaml", "json"]).optional().describe("Format to retrieve the logic in")
+          },
+          {
+            annotations: {
+              title: "Get Task Details",
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, task_id, include_draft, type }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams();
+              if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
+              if (type) params.append("type", type);
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_get_task_details",
+                  analysis_tip: "Study the 'script' field to understand task patterns",
+                  key_differences: [
+                    "Tasks use 'task \"name\"' with quoted name",
+                    "No input block (tasks don't receive parameters)",
+                    "No response block (tasks run in background)",
+                    "Schedule block controls when task runs"
+                  ],
+                  learning_points: [
+                    "Check active status (true/false)",
+                    "Review history settings for logging",
+                    "Examine schedule.events for cron patterns",
+                    "See how api.request is used for integrations"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error getting task details: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_get_task_details"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_delete_task",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            task_id: z.union([z.string(), z.number()]).describe("The ID of the task to delete")
+          },
+          {
+            annotations: {
+              title: "Delete Background Task",
+              readOnlyHint: false,
+              destructiveHint: true,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, task_id }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}`;
+              const result = await makeApiRequest(url, token, "DELETE", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `Task ${task_id} deleted successfully`,
+                  data: result,
+                  operation: "xano_delete_task"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error deleting task: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_delete_task"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_publish_function",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            function_id: z.union([z.string(), z.number()]).describe("The ID of the function to publish"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript")
+          },
+          {
+            annotations: {
+              title: "Publish Function to Live",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, function_id, type = "xs" }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}/publish`;
+              const result = await makeApiRequest(url, token, "POST", { type }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `Function ${function_id} published to live successfully`,
+                  data: result,
+                  operation: "xano_publish_function",
+                  workflow_tips: [
+                    "Draft changes are now live and accessible",
+                    "Test your function endpoint to verify it's working",
+                    "Use xano_get_function_details to see the published version",
+                    "Future updates will create new drafts until published again"
+                  ],
+                  important: "Publishing makes changes immediately available to all API consumers"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error publishing function: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_publish_function",
+                    troubleshooting: [
+                      "Ensure the function has draft changes to publish",
+                      "Verify the function_id exists",
+                      "Check that you have update permissions",
+                      "Use xano_get_function_details with include_draft=true to see draft status"
+                    ]
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_publish_api",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            api_id: z.union([z.string(), z.number()]).describe("The ID of the API to publish"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript")
+          },
+          {
+            annotations: {
+              title: "Publish API to Live",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, api_group_id, api_id, type = "xs" }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api/${formatId(api_id)}/publish`;
+              const result = await makeApiRequest(url, token, "POST", { type }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `API ${api_id} published to live successfully`,
+                  data: result,
+                  operation: "xano_publish_api",
+                  endpoint_info: result.endpoint ? `Live at: ${instance_name}.xano.io${result.endpoint}` : "Check API group for endpoint",
+                  workflow_tips: [
+                    "API endpoint is now live and serving traffic",
+                    "Test your endpoint with real requests",
+                    "Monitor for any errors in production",
+                    "Future updates create drafts until published"
+                  ],
+                  important: "Published APIs serve live traffic immediately"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error publishing API: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_publish_api",
+                    troubleshooting: [
+                      "Ensure the API has draft changes to publish",
+                      "Verify api_id exists in the api_group_id",
+                      "Check update permissions for the workspace",
+                      "Use xano_get_api_with_logic with include_draft=true to check status"
+                    ]
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_publish_task",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            task_id: z.union([z.string(), z.number()]).describe("The ID of the task to publish"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript")
+          },
+          {
+            annotations: {
+              title: "Publish Task to Live",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, task_id, type = "xs" }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}/publish`;
+              const result = await makeApiRequest(url, token, "POST", { type }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `Task ${task_id} published to live successfully`,
+                  data: result,
+                  operation: "xano_publish_task",
+                  workflow_tips: [
+                    "Task schedule is now active (if active=true)",
+                    "Check task execution history for runs",
+                    "Monitor task logs for any errors",
+                    "Future updates create drafts until published"
+                  ],
+                  schedule_info: result.schedule ? `Running on schedule: ${JSON.stringify(result.schedule)}` : "No schedule defined",
+                  important: "Published tasks run according to their schedule immediately"
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error publishing task: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_publish_task",
+                    troubleshooting: [
+                      "Ensure the task has draft changes to publish",
+                      "Verify the task_id exists",
+                      "Check task permissions in workspace",
+                      "Use xano_get_task_details with include_draft=true to check status"
+                    ]
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_update_function",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            function_id: z.union([z.string(), z.number()]).describe("The ID of the function to update"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
+            script: z.string().describe(`Updated XanoScript function code. Example:
+    function updated_function {
+      description = "Updated function description"
+      input {
+        email email_field {
+          description = "Email to process"
+        }
+      }
+      stack {
+        precondition ($input.email_field != "") {
+          error = "Email is required"
+        }
+    
+        api.request {
+          url = "https://api.example.com/process"
+          method = "POST"
+          params = {}|set:"email":$input.email_field
+          headers = []
+          description = "Process email"
+        } as $result
+      }
+      response {
+        value = $result.response.data
+      }
+    }`)
+          },
+          {
+            annotations: {
+              title: "Update Function as Draft",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, function_id, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/function/${formatId(function_id)}`;
+              const result = await makeApiRequest(url, token, "PUT", { type, script }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `Function ${function_id} updated as draft successfully`,
+                  data: result,
+                  operation: "xano_update_function",
+                  draft_status: "Changes saved as draft - NOT live yet",
+                  next_steps: [
+                    "Test the draft version before publishing",
+                    "Use xano_get_function_details with include_draft=true to see draft",
+                    "Use xano_publish_function to make changes live",
+                    "Draft changes won't affect live function until published"
+                  ],
+                  syntax_reminder: {
+                    structure: "function name { description input { } stack { } response { } }",
+                    field_types: ["email", "text", "int", "bool", "decimal", "timestamp"],
+                    key_patterns: "precondition for validation, api.request for external calls"
+                  }
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error updating function: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_update_function",
+                    syntax_help: {
+                      correct_structure: "function name { description = \"desc\" input { } stack { } response { } }",
+                      common_mistakes: [
+                        "Using 'api' instead of 'function' keyword",
+                        "Missing required blocks",
+                        "Invalid field types in input",
+                        "Syntax errors in XanoScript"
+                      ],
+                      tip: "Get existing function with xano_get_function_details to see current syntax"
+                    }
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_update_task",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            task_id: z.union([z.string(), z.number()]).describe("The ID of the task to update"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
+            script: z.string().describe(`Updated XanoScript task code. Example:
+    task "updated_task" {
+      active = true
+      history = {limit: 100, inherit: true}
+  
+      stack {
+        api.request {
+          url = "https://api.example.com/monitor"
+          method = "GET"
+          headers = []
+          description = "Monitor system health"
+        } as $health_status
+    
+        precondition ($health_status.response.status == 200) {
+          error = "Health check failed"
+        }
+      }
+  
+      schedule {
+        events = ["*/10 * * * *"]  // Every 10 minutes
+      }
+    }`)
+          },
+          {
+            annotations: {
+              title: "Update Task as Draft",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, task_id, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}`;
+              const result = await makeApiRequest(url, token, "PUT", { type, script }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `Task ${task_id} updated as draft successfully`,
+                  data: result,
+                  operation: "xano_update_task",
+                  draft_status: "Changes saved as draft - NOT live yet",
+                  next_steps: [
+                    "Test the draft task logic",
+                    "Use xano_get_task_details with include_draft=true to see draft",
+                    "Use xano_publish_task to make changes live",
+                    "Current live task continues running unchanged"
+                  ],
+                  syntax_reminder: {
+                    structure: "task \"name\" { active history stack { } schedule { } }",
+                    no_input_output: "Tasks don't have input or response blocks",
+                    cron_examples: {
+                      "every_5_min": "*/5 * * * *",
+                      "hourly": "0 * * * *",
+                      "daily": "0 0 * * *"
+                    }
+                  }
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error updating task: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_update_task",
+                    syntax_help: {
+                      correct_structure: "task \"task_name\" { active = true history = {limit: 50, inherit: true} stack { } schedule { events = [] } }",
+                      common_mistakes: [
+                        "Missing quotes around task name",
+                        "Missing required blocks: active, history, schedule",
+                        "Using input/response blocks (tasks don't have these)",
+                        "Invalid cron expression in schedule.events"
+                      ],
+                      tip: "Get existing task with xano_get_task_details to see current syntax"
+                    }
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_activate_task",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            task_id: z.union([z.string(), z.number()]).describe("The ID of the task to activate/deactivate"),
+            active: z.boolean().describe("Set to true to activate, false to deactivate the task")
+          },
+          {
+            annotations: {
+              title: "Activate/Deactivate Task",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, task_id, active }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/task/${formatId(task_id)}/activate`;
+              const result = await makeApiRequest(url, token, "PUT", { active }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: `Task ${task_id} ${active ? 'activated' : 'deactivated'} successfully`,
+                  data: result,
+                  operation: "xano_activate_task",
+                  status: active ? "Task is now running on schedule" : "Task is paused and won't run",
+                  draft_note: "This creates a draft change - use xano_publish_task to make it live",
+                  tips: [
+                    active ? "Task will execute according to its schedule" : "Task won't run until reactivated",
+                    "Check task history to monitor executions",
+                    "This doesn't affect the task logic, only its active state"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error ${active ? 'activating' : 'deactivating'} task: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_activate_task",
+                    troubleshooting: [
+                      "Verify the task_id exists",
+                      "Check task permissions",
+                      "Use xano_get_task_details to see current active state"
+                    ]
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_list_apis_with_logic",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
+            include_draft: z.boolean().optional().describe("Include draft versions"),
+            page: z.number().optional().describe("Page number (default: 1)"),
+            per_page: z.number().optional().describe("Number of results per page (default: 50)"),
+            search: z.string().optional().describe("Search term to filter APIs"),
+            sort: z.enum(["created_at", "updated_at", "name"]).optional().describe("Sort field"),
+            order: z.enum(["asc", "desc"]).optional().describe("Sort order"),
+            type: z.enum(["xs", "yaml", "json"]).optional().describe("Script type filter")
+          },
+          {
+            annotations: {
+              title: "List APIs with Logic",
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ 
+            instance_name, workspace_id, api_group_id, include_draft, 
+            page = 1, per_page = 50, search, sort, order, type 
+          }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: per_page.toString()
+              });
+          
+              if (include_draft !== undefined) params.append("include_draft", include_draft.toString());
+              if (search) params.append("search", search);
+              if (sort) params.append("sort", sort);
+              if (order) params.append("order", order);
+              if (type) params.append("type", type);
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/apigroup/${formatId(api_group_id)}/api?${params.toString()}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_list_apis_with_logic",
+                  quick_actions: {
+                    view_details: "Use xano_get_api_with_logic to see full XanoScript",
+                    update_api: "Use xano_update_api_with_logic to modify as draft",
+                    publish_api: "Use xano_publish_api to make draft changes live",
+                    create_new: "Use xano_create_api_with_logic to add new API"
+                  },
+                  api_patterns: {
+                    structure: "query name verb=METHOD { input { } stack { } response { } }",
+                    verbs: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                    tip: "APIs with draft=true have unpublished changes"
+                  }
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error listing APIs: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_list_apis_with_logic"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_create_table_with_script",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
+            script: z.string().describe(`Complete XanoScript table definition. Example:
+    table users {
+      description = "User accounts table"
+  
+      field id {
+        type = "int"
+        primary_key = true
+        auto_increment = true
+      }
+  
+      field email {
+        type = "email"
+        unique = true
+        required = true
+        description = "User's email address"
+      }
+  
+      field password {
+        type = "password"
+        required = true
+        description = "Hashed password"
+      }
+  
+      field first_name {
+        type = "text"
+        required = true
+        max_length = 100
+      }
+  
+      field last_name {
+        type = "text"
+        required = true
+        max_length = 100
+      }
+  
+      field status {
+        type = "enum"
+        values = ["active", "inactive", "pending"]
+        default = "pending"
+      }
+  
+      field created_at {
+        type = "timestamp"
+        default = "now()"
+      }
+  
+      field updated_at {
+        type = "timestamp"
+        default = "now()"
+        on_update = "now()"
+      }
+  
+      index email_idx {
+        fields = ["email"]
+        type = "btree"
+      }
+  
+      index name_idx {
+        fields = ["first_name", "last_name"]
+        type = "btree"
+      }
+    }`)
+          },
+          {
+            annotations: {
+              title: "Create Table with XanoScript",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/table`;
+              const result = await makeApiRequest(url, token, "POST", { type, script }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "Table created successfully with XanoScript",
+                  data: result,
+                  operation: "xano_create_table_with_script",
+                  table_info: {
+                    id: result.id,
+                    name: result.name,
+                    field_count: result.fields ? result.fields.length : "Check table schema"
+                  },
+                  capabilities: [
+                    "Complete table schema defined in code",
+                    "All fields, types, and constraints created",
+                    "Indexes automatically configured",
+                    "Version-controllable database schema"
+                  ],
+                  field_types: [
+                    "int", "decimal", "text", "email", "password",
+                    "bool", "timestamp", "date", "time", "json",
+                    "enum", "file", "image", "reference"
+                  ],
+                  next_steps: [
+                    "Use xano_get_table_with_script to see the schema",
+                    "Create APIs to interact with the table",
+                    "Add data using table record tools"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error creating table: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_create_table_with_script",
+                    syntax_help: {
+                      structure: "table name { field fieldname { type = \"type\" } index indexname { fields = [\"field\"] } }",
+                      field_properties: ["type", "required", "unique", "default", "max_length", "primary_key", "auto_increment"],
+                      index_types: ["btree", "hash", "search"],
+                      common_mistakes: [
+                        "Missing field type specification",
+                        "Invalid field type",
+                        "Duplicate field names",
+                        "Invalid index configuration"
+                      ]
+                    }
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_get_table_with_script",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Format to retrieve the schema in")
+          },
+          {
+            annotations: {
+              title: "Get Table Schema as XanoScript",
+              readOnlyHint: true,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, table_id, type = "xs" }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const params = new URLSearchParams();
+              if (type) params.append("type", type);
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}${params.toString() ? '?' + params.toString() : ''}`;
+              const result = await makeApiRequest(url, token, "GET", null, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  data: result,
+                  operation: "xano_get_table_with_script",
+                  schema_insights: [
+                    "Complete table definition in XanoScript",
+                    "All fields with types and constraints",
+                    "Indexes and relationships defined",
+                    "Can be version controlled or shared"
+                  ],
+                  use_cases: [
+                    "Export schema for backup",
+                    "Share table structure with team",
+                    "Use as template for similar tables",
+                    "Track schema changes in git"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error getting table schema: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_get_table_with_script"
+                  })
+                }]
+              };
+            }
+          }
+        );
+
+
+
+        this.server.tool(
+          "xano_update_table_with_script",
+          {
+            instance_name: z.string().describe("The name of the Xano instance"),
+            workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+            table_id: z.union([z.string(), z.number()]).describe("The ID of the table to update"),
+            type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
+            script: z.string().describe("Updated XanoScript table definition with schema changes")
+          },
+          {
+            annotations: {
+              title: "Update Table Schema with XanoScript",
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: true
+            }
+          },
+          async ({ instance_name, workspace_id, table_id, type = "xs", script }) => {
+            if (!this.props?.authenticated) {
+              return {
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
+              };
+            }
+
+            try {
+              const token = await this.getFreshApiKey();
+              if (!token) {
+                throw new Error("No API key available");
+              }
+
+              const url = `${getMetaApiUrl(instance_name)}/beta/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}`;
+              const result = await makeApiRequest(url, token, "PUT", { type, script }, this.env);
+
+              return {
+                content: [{ type: "text", text: JSON.stringify({
+                  success: true,
+                  message: "Table schema updated successfully",
+                  data: result,
+                  operation: "xano_update_table_with_script",
+                  migration_notes: [
+                    "Schema changes applied to table structure",
+                    "Existing data preserved where possible",
+                    "New fields added with defaults if specified",
+                    "Indexes updated as defined"
+                  ],
+                  warnings: [
+                    "Removing fields may result in data loss",
+                    "Changing field types may require data conversion",
+                    "Always backup before major schema changes"
+                  ]
+                }, null, 2) }]
+              };
+            } catch (error) {
+              return {
+                isError: true,
+                content: [{
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: {
+                      message: `Error updating table schema: ${error.message}`,
+                      code: "EXCEPTION"
+                    },
+                    operation: "xano_update_table_with_script",
+                    troubleshooting: [
+                      "Verify table exists and has proper permissions",
+                      "Check for data compatibility with schema changes",
+                      "Ensure new field types are valid",
+                      "Consider impact on existing APIs using this table"
+                    ]
+                  })
+                }]
+              };
+            }
+          }
+        );
   }
 }
 
