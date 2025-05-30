@@ -19,7 +19,7 @@ export function registerTableTools(server: McpServer, props: any) {
   server.tool(
     "xano_get_table_details",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
     },
@@ -49,7 +49,7 @@ export function registerTableTools(server: McpServer, props: any) {
   server.tool(
     "xano_get_table_schema",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
     },
@@ -79,7 +79,7 @@ export function registerTableTools(server: McpServer, props: any) {
   server.tool(
     "xano_create_table",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       name: z.string().describe("The name of the new table"),
       description: z.string().optional().describe("Table description"),
@@ -121,7 +121,7 @@ export function registerTableTools(server: McpServer, props: any) {
   server.tool(
     "xano_update_table",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table to update"),
       name: z.string().optional().describe("The new name of the table"),
@@ -165,7 +165,7 @@ export function registerTableTools(server: McpServer, props: any) {
   server.tool(
     "xano_delete_table",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table to delete")
     },
@@ -200,7 +200,7 @@ export function registerSchemaTools(server: McpServer, props: any) {
   server.tool(
     "xano_add_field_to_schema",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       field_name: z.string().describe("The name of the new field"),
@@ -257,7 +257,7 @@ export function registerSchemaTools(server: McpServer, props: any) {
   server.tool(
     "xano_rename_schema_field",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       old_name: z.string().describe("The current name of the field"),
@@ -294,7 +294,7 @@ export function registerSchemaTools(server: McpServer, props: any) {
   server.tool(
     "xano_delete_field",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       field_name: z.string().describe("The name of the field to delete")
@@ -331,7 +331,7 @@ export function registerRecordTools(server: McpServer, props: any) {
   server.tool(
     "xano_browse_table_content",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       page: z.number().optional().describe("Page number (default: 1)"),
@@ -370,7 +370,7 @@ export function registerRecordTools(server: McpServer, props: any) {
   server.tool(
     "xano_search_table_content",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       search_conditions: z.array(z.record(z.any())).optional().describe("List of search conditions"),
@@ -412,7 +412,7 @@ export function registerRecordTools(server: McpServer, props: any) {
   server.tool(
     "xano_get_table_record",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       record_id: z.union([z.string(), z.number()]).describe("The ID of the record to retrieve")
@@ -443,7 +443,7 @@ export function registerRecordTools(server: McpServer, props: any) {
   server.tool(
     "xano_create_table_record",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       record_data: z.record(z.any()).describe("The data for the new record")
@@ -474,7 +474,7 @@ export function registerRecordTools(server: McpServer, props: any) {
   server.tool(
     "xano_update_table_record",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       record_id: z.union([z.string(), z.number()]).describe("The ID of the record to update"),
@@ -506,7 +506,7 @@ export function registerRecordTools(server: McpServer, props: any) {
   server.tool(
     "xano_delete_table_record",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       record_id: z.union([z.string(), z.number()]).describe("The ID of the record to delete")
@@ -542,7 +542,7 @@ export function registerBulkTools(server: McpServer, props: any) {
   server.tool(
     "xano_bulk_create_records",
     {
-      instance_name: z.string().describe("The name of the Xano instance"),
+      instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
       workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
       table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
       records: z.array(z.record(z.any())).describe("List of record data to insert"),

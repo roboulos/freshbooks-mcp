@@ -294,11 +294,24 @@ export async function makeApiRequest(url: string, token: string, method = "GET",
 
 // Utility to get meta API URL for an instance
 export function getMetaApiUrl(instanceName: string): string {
+  // If it's already a full URL, just append the API path
   if (instanceName.startsWith("http://") || instanceName.startsWith("https://")) {
     return `${instanceName}/api:meta`;
-  } else if (instanceName.includes(".") && !instanceName.includes("/")) {
-    return `https://${instanceName}/api:meta`;
-  } else {
+  } 
+  // If it contains a dot, assume it's a full domain (like xivz-2uos-g8gq.n7.xano.io or api.clearleads.io)
+  else if (instanceName.includes(".")) {
+    // Remove any trailing slashes
+    const cleanInstance = instanceName.replace(/\/$/, "");
+    return `https://${cleanInstance}/api:meta`;
+  } 
+  // If it's just the instance ID without domain, we can't determine the correct subdomain
+  else {
+    console.warn(
+      `⚠️ Instance name '${instanceName}' provided without domain. ` +
+      `Please provide the full domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io'). ` +
+      `Defaulting to n7c.xano.io which may cause SSL errors for some instances.`
+    );
+    // Default to n7c for backward compatibility, but this may cause SSL errors
     return `https://${instanceName}.n7c.xano.io/api:meta`;
   }
 }

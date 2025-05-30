@@ -117,7 +117,7 @@ export class MyMCP extends McpAgent<Env, unknown, AuthProps> {
     this.server.tool(
       "xano_get_instance_details",
       {
-        instance_name: z.string().describe("The name of the Xano instance")
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')")
       },
       async ({ instance_name }) => {
         // Check authentication using either direct props or user object
@@ -161,7 +161,7 @@ export class MyMCP extends McpAgent<Env, unknown, AuthProps> {
     this.server.tool(
       "xano_list_databases",
       {
-        instance_name: z.string().describe("The name of the Xano instance")
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')")
       },
       async ({ instance_name }) => {
         // Check authentication using either direct props or user object
@@ -212,7 +212,7 @@ export class MyMCP extends McpAgent<Env, unknown, AuthProps> {
     this.server.tool(
       "xano_get_workspace_details",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace")
       },
       async ({ instance_name, workspace_id }) => {
@@ -264,7 +264,7 @@ export class MyMCP extends McpAgent<Env, unknown, AuthProps> {
     this.server.tool(
       "xano_list_tables",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         database_id: z.union([z.string(), z.number()]).describe("The ID of the Xano workspace/database")
       },
       async ({ instance_name, database_id }) => {

@@ -128,7 +128,7 @@ function handleError(error: any): {
 export const getTableDetails = {
   name: "xano_get_table_details",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
   },
@@ -158,7 +158,7 @@ export const getTableDetails = {
 export const createTable = {
   name: "xano_create_table",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     name: z.string().describe("The name of the new table"),
     description: z.string().optional().describe("Table description"),
@@ -200,7 +200,7 @@ export const createTable = {
 export const updateTable = {
   name: "xano_update_table",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table to update"),
     name: z.string().optional().describe("The new name of the table"),
@@ -244,7 +244,7 @@ export const updateTable = {
 export const deleteTable = {
   name: "xano_delete_table",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table to delete")
   },
@@ -274,7 +274,7 @@ export const deleteTable = {
 export const getTableSchema = {
   name: "xano_get_table_schema",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
   },
@@ -306,7 +306,7 @@ export const getTableSchema = {
 export const addFieldToSchema = {
   name: "xano_add_field_to_schema",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     field_name: z.string().describe("The name of the new field"),
@@ -363,7 +363,7 @@ export const addFieldToSchema = {
 export const renameSchemaField = {
   name: "xano_rename_schema_field",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     old_name: z.string().describe("The current name of the field"),
@@ -400,7 +400,7 @@ export const renameSchemaField = {
 export const deleteField = {
   name: "xano_delete_field",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     field_name: z.string().describe("The name of the field to delete")
@@ -434,7 +434,7 @@ export const deleteField = {
 export const browseTableContent = {
   name: "xano_browse_table_content",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     page: z.number().optional().describe("Page number (default: 1)"),
@@ -473,7 +473,7 @@ export const browseTableContent = {
 export const searchTableContent = {
   name: "xano_search_table_content",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     search_conditions: z.array(z.record(z.any())).optional().describe("List of search conditions"),
@@ -515,7 +515,7 @@ export const searchTableContent = {
 export const getTableRecord = {
   name: "xano_get_table_record",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     record_id: z.union([z.string(), z.number()]).describe("The ID of the record to retrieve")
@@ -546,7 +546,7 @@ export const getTableRecord = {
 export const createTableRecord = {
   name: "xano_create_table_record",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     record_data: z.record(z.any()).describe("The data for the new record")
@@ -577,7 +577,7 @@ export const createTableRecord = {
 export const updateTableRecord = {
   name: "xano_update_table_record",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     record_id: z.union([z.string(), z.number()]).describe("The ID of the record to update"),
@@ -609,7 +609,7 @@ export const updateTableRecord = {
 export const deleteTableRecord = {
   name: "xano_delete_table_record",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     record_id: z.union([z.string(), z.number()]).describe("The ID of the record to delete")
@@ -642,7 +642,7 @@ export const deleteTableRecord = {
 export const bulkCreateRecords = {
   name: "xano_bulk_create_records",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     records: z.array(z.record(z.any())).describe("List of record data to insert"),
@@ -680,7 +680,7 @@ export const bulkCreateRecords = {
 export const bulkUpdateRecords = {
   name: "xano_bulk_update_records",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     updates: z.array(z.object({
@@ -715,7 +715,7 @@ export const bulkUpdateRecords = {
 export const bulkDeleteRecords = {
   name: "xano_bulk_delete_records",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     record_ids: z.array(z.union([z.string(), z.number()])).describe("List of record IDs to delete")
@@ -747,7 +747,7 @@ export const bulkDeleteRecords = {
 export const truncateTable = {
   name: "xano_truncate_table",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     reset: z.boolean().optional().describe("Whether to reset the primary key counter")
@@ -781,7 +781,7 @@ export const truncateTable = {
 export const listIndexes = {
   name: "xano_list_indexes",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
   },
@@ -811,7 +811,7 @@ export const listIndexes = {
 export const createBtreeIndex = {
   name: "xano_create_btree_index",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     fields: z.array(z.object({
@@ -846,7 +846,7 @@ export const createBtreeIndex = {
 export const createUniqueIndex = {
   name: "xano_create_unique_index",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     fields: z.array(z.object({
@@ -881,7 +881,7 @@ export const createUniqueIndex = {
 export const createSearchIndex = {
   name: "xano_create_search_index",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     name: z.string().describe("Name for the search index"),
@@ -918,7 +918,7 @@ export const createSearchIndex = {
 export const deleteIndex = {
   name: "xano_delete_index",
   parameters: {
-    instance_name: z.string().describe("The name of the Xano instance"),
+    instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
     workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
     table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
     index_id: z.union([z.string(), z.number()]).describe("The ID of the index to delete")

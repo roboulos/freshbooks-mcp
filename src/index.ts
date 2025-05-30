@@ -474,7 +474,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_get_instance_details",
       {
-        instance_name: z.string().describe("The name of the Xano instance")
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')")
       },
       async ({ instance_name }) => {
         // Check authentication
@@ -518,7 +518,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_list_databases",
       {
-        instance_name: z.string().describe("The name of the Xano instance")
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')")
       },
       async ({ instance_name }) => {
         // Check authentication
@@ -570,7 +570,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_get_workspace_details",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace")
       },
       async ({ instance_name, workspace_id }) => {
@@ -623,7 +623,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_list_tables",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         database_id: z.union([z.string(), z.number()]).describe("The ID of the Xano workspace/database")
       },
       async ({ instance_name, database_id }) => {
@@ -679,7 +679,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_get_table_details",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
       },
@@ -733,7 +733,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_get_table_schema",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table")
       },
@@ -819,7 +819,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_create_table",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         name: z.string().describe("The name of the new table"),
         description: z.string().optional().describe("Table description"),
@@ -886,7 +886,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_update_table",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table to update"),
         name: z.string().optional().describe("The new name of the table"),
@@ -957,7 +957,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_delete_table",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table to delete")
       },
@@ -1049,7 +1049,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_add_field_to_schema",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         field_name: z.string().describe("The name of the new field"),
@@ -1209,7 +1209,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_rename_schema_field",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         old_name: z.string().describe("The current name of the field"),
@@ -1303,7 +1303,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_delete_field",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         field_name: z.string().describe("The name of the field to delete")
@@ -1390,7 +1390,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_browse_table_content",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         page: z.number().optional().describe("Page number (default: 1)"),
@@ -1455,7 +1455,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_get_table_record",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         record_id: z.union([z.string(), z.number()]).describe("The ID of the record to retrieve")
@@ -1510,7 +1510,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_create_table_record",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         record_data: z.record(z.any()).describe("The data for the new record")
@@ -1597,7 +1597,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_update_table_record",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         record_id: z.union([z.string(), z.number()]).describe("The ID of the record to update"),
@@ -1653,7 +1653,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_delete_table_record",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         record_id: z.union([z.string(), z.number()]).describe("The ID of the record to delete")
@@ -1712,7 +1712,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_bulk_create_records",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         records: z.array(z.record(z.any())).describe("List of record data to insert"),
@@ -1869,7 +1869,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     this.server.tool(
       "xano_bulk_update_records",
       {
-        instance_name: z.string().describe("The name of the Xano instance"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
         workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
         table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         updates: z.array(z.object({
@@ -2090,7 +2090,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_files",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of files per page (default: 50)")
@@ -2234,7 +2234,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_file",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             file_id: z.union([z.string(), z.number()]).describe("The ID of the file to delete")
           },
@@ -2276,7 +2276,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_workspace_branches",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace")
           },
           async ({ instance_name, workspace_id }) => {
@@ -2312,7 +2312,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_workspace_branch",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch_name: z.string().describe("The name of the branch to delete")
           },
@@ -2349,7 +2349,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_browse_api_groups",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of items per page (default: 50)")
@@ -2451,7 +2451,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_api_group",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group")
           },
@@ -2545,7 +2545,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_api_group",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group to delete")
           },
@@ -2587,7 +2587,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_browse_apis_in_group",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             page: z.number().optional().describe("Page number (default: 1)"),
@@ -2682,7 +2682,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_api",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API")
@@ -2771,7 +2771,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_api",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API to delete")
@@ -2814,7 +2814,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_export_workspace",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             include_data: z.boolean().optional().describe("Whether to include table data in export (default: false)")
           },
@@ -2861,7 +2861,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_export_workspace_schema",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name (leave empty for current live branch)"),
             password: z.string().optional().describe("Optional password to encrypt the export")
@@ -2910,7 +2910,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_browse_request_history",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             page: z.number().optional().describe("Page number (default: 1)"),
             per_page: z.number().optional().describe("Number of requests per page (default: 50)"),
@@ -2958,7 +2958,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_truncate_table",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
             reset: z.boolean().optional().describe("Whether to reset the primary key sequence (default: false)")
@@ -3040,7 +3040,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_btree_index",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
             fields: z.array(z.object({
@@ -3105,7 +3105,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_functions",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name"),
             include_draft: z.boolean().optional().describe("Include draft functions"),
@@ -3198,7 +3198,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_function",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Function type - always use 'xs' for XanoScript"),
@@ -3312,7 +3312,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_function_details",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             function_id: z.union([z.string(), z.number()]).describe("The ID of the function"),
             include_draft: z.boolean().optional().describe("Include draft version")
@@ -3384,7 +3384,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_function",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             function_id: z.union([z.string(), z.number()]).describe("The ID of the function to delete")
           },
@@ -3448,7 +3448,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_search_index",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
             name: z.string().describe("Name for the search index"),
@@ -3515,7 +3515,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_api_with_logic",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             type: z.enum(["xs", "yaml", "json"]).default("xs").describe("Script type - always use 'xs' for XanoScript"),
@@ -3644,7 +3644,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_task",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name"),
             type: z.enum(["xs", "yaml", "json"]).default("xs").describe("Script type - always use 'xs' for XanoScript"),
@@ -3761,7 +3761,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_api_with_logic",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API"),
@@ -3842,7 +3842,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_update_api_with_logic",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API to update"),
@@ -3912,7 +3912,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_tasks",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name"),
             include_draft: z.boolean().optional().describe("Include draft tasks"),
@@ -4011,7 +4011,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_task_details",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             task_id: z.union([z.string(), z.number()]).describe("The ID of the task"),
             include_draft: z.boolean().optional().describe("Include draft version"),
@@ -4091,7 +4091,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_delete_task",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             task_id: z.union([z.string(), z.number()]).describe("The ID of the task to delete")
           },
@@ -4153,7 +4153,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_publish_function",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             function_id: z.union([z.string(), z.number()]).describe("The ID of the function to publish"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript")
@@ -4229,7 +4229,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_publish_api",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API to publish"),
@@ -4307,7 +4307,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_publish_task",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             task_id: z.union([z.string(), z.number()]).describe("The ID of the task to publish"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript")
@@ -4384,7 +4384,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_update_function",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             function_id: z.union([z.string(), z.number()]).describe("The ID of the function to update"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
@@ -4494,7 +4494,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_update_task",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             task_id: z.union([z.string(), z.number()]).describe("The ID of the task to update"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
@@ -4605,7 +4605,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_activate_task",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             task_id: z.union([z.string(), z.number()]).describe("The ID of the task to activate/deactivate"),
             active: z.boolean().describe("Set to true to activate, false to deactivate the task")
@@ -4680,7 +4680,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_list_apis_with_logic",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             include_draft: z.boolean().optional().describe("Include draft versions"),
@@ -4773,7 +4773,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_table_with_script",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
             script: z.string().describe(`Complete XanoScript table definition. Example:
@@ -4929,7 +4929,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_get_table_with_script",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Format to retrieve the schema in")
@@ -5006,7 +5006,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_update_table_with_script",
           {
-            instance_name: z.string().describe("The name of the Xano instance"),
+            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             table_id: z.union([z.string(), z.number()]).describe("The ID of the table to update"),
             type: z.enum(["xs", "yaml", "json"]).optional().default("xs").describe("Script type - always use 'xs' for XanoScript"),
