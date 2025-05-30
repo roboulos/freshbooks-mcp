@@ -485,11 +485,16 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         }
 
         try {
-          // Construct instance details
-          const instanceDomain = `${instance_name}.n7c.xano.io`;
+          // Use the full domain provided (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')
+          const instanceDomain = instance_name.includes('.') ? instance_name : `${instance_name}.n7c.xano.io`;
+          
+          // Extract instance ID from domain for display name
+          const instanceId = instance_name.split('.')[0];
+          const displayName = instanceId.split("-")[0].toUpperCase();
+          
           const details = {
-            name: instance_name,
-            display: instance_name.split("-")[0].toUpperCase(),
+            name: instanceId,
+            display: displayName,
             xano_domain: instanceDomain,
             rate_limit: false,
             meta_api: `https://${instanceDomain}/api:meta`,
