@@ -66,7 +66,7 @@ async function disableWorkerSession(sessionId: string, env: Env): Promise<{succe
     if (sessionData) {
       const data = JSON.parse(sessionData);
       data.enabled = false;
-      await env.OAUTH_KV.put(sessionKey, JSON.stringify(data));
+      await env.OAUTH_KV.put(sessionKey, JSON.stringify(data, null, 2));
       return { success: true, sessionEnabled: false };
     }
     
@@ -84,7 +84,7 @@ async function enableWorkerSession(sessionId: string, env: Env): Promise<{succes
     if (sessionData) {
       const data = JSON.parse(sessionData);
       data.enabled = true;
-      await env.OAUTH_KV.put(sessionKey, JSON.stringify(data));
+      await env.OAUTH_KV.put(sessionKey, JSON.stringify(data, null, 2));
       return { success: true, sessionEnabled: true };
     }
     
@@ -108,7 +108,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     // When OAuth token expires, user will need to re-authenticate
     return this.props?.apiKey || null;
   }
-
 
   async init() {
     
@@ -187,8 +186,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
-                emoji: "🗑️ TOKEN CLEANUP",
                 success: true,
+                emoji_header: "🗑️ TOKEN CLEANUP",
                 message: `Deleted ${deletedCount} authentication tokens`,
                 note: "All tokens have been deleted. The next tool call will trigger OAuth re-authentication. You may need to refresh your MCP client or restart the connection.",
                 deleted: {
@@ -252,8 +251,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({
-                emoji: "🔑 KV STORAGE DEBUG",
+              text: "🔑 KV STORAGE DEBUG\n\n" + JSON.stringify({
                 keyCount: keys.length,
                 keys: keyDetails,
                 propsAccessToken: this.props?.accessToken ? this.props.accessToken.substring(0, 10) + "..." : null
@@ -340,8 +338,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({
-                emoji: "📋 ACTIVE SESSIONS",
+              text: "📋 ACTIVE SESSIONS\n\n" + JSON.stringify({
                 success: result.success,
                 sessionCount: result.sessions?.length || 0,
                 sessions: result.sessions,
@@ -382,8 +379,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({
-                emoji: "🔧 SESSION CONTROL",
+              text: "🔧 SESSION CONTROL\n\n" + JSON.stringify({
                 action: action,
                 sessionId: sessionId,
                 success: result.success,
@@ -1202,8 +1198,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
-                "➕ FIELD ADDED": true,
-                emoji: "➕ FIELD ADDED",
+                
                 success: true,
                 data: result || { message: "Field added successfully" },
                 operation: "xano_add_field_to_schema"
@@ -1299,8 +1294,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
-                "✏️ FIELD RENAMED": true,
-                emoji: "✏️ FIELD RENAMED",
+                
                 success: true,
                 data: result || { message: "Field renamed successfully" },
                 operation: "xano_rename_schema_field"
@@ -1595,7 +1589,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: `📄 RECORD DETAILS\n${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2)
             }]
           };
         } catch (error) {
@@ -1670,9 +1664,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({
-                "➕ RECORD CREATED": true,
-                emoji: "➕ RECORD CREATED",
+              text: `➕ RECORD CREATED\n${"=".repeat(50)}\n\n` + JSON.stringify({
+                
                 success: true,
                 data: result,
                 operation: "xano_create_table_record"
@@ -1741,7 +1734,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result)
+              text: JSON.stringify(result, null, 2)
             }]
           };
         } catch (error) {
@@ -1861,7 +1854,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           };
           
           const result = await makeApiRequest(url, token, "POST", data, this.env);
-          console.log("Bulk create response:", JSON.stringify(result));
+          console.log("Bulk create response:", JSON.stringify(result, null, 2));
 
           // Handle Xano's specific bulk operation response format
           // which returns: { error: [], success: [ids], success_total: n }
@@ -2050,10 +2043,10 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           
           // Log the request data for debugging
           console.log("Bulk update request URL:", url);
-          console.log("Bulk update request data:", JSON.stringify(data));
+          console.log("Bulk update request data:", JSON.stringify(data, null, 2));
           
           const result = await makeApiRequest(url, token, "POST", data, this.env);
-          console.log("Bulk update response:", JSON.stringify(result));
+          console.log("Bulk update response:", JSON.stringify(result, null, 2));
 
           // Handle Xano's specific bulk update response format
           // which returns: { error: [], success: [ids], success_total: n }
@@ -2086,9 +2079,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{
                   type: "text",
-                  text: JSON.stringify({
-                "✏️ BULK UPDATE": true,
-                    success: true,
+                  text: `✏️ BULK UPDATE\n${"=".repeat(50)}\n\n` + JSON.stringify({
+                success: true,
                     message: `Successfully updated ${result.success_total} records`,
                     data: {
                       updated_records: result.success,
@@ -2105,9 +2097,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             return {
               content: [{
                 type: "text",
-                text: JSON.stringify({
-                "✏️ BULK UPDATE": true,
-                  success: true,
+                text: "✏️ BULK UPDATE\n\n" + JSON.stringify({
+                success: true,
                   message: "Records updated successfully",
                   affected_count: updates.length,
                   operation: "xano_bulk_update_records"
@@ -2121,9 +2112,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               isError: true,
               content: [{ 
                 type: "text", 
-                text: JSON.stringify({
-                "✏️ BULK UPDATE": true,
-                  success: false,
+                text: "✏️ BULK UPDATE\n\n" + JSON.stringify({
+                success: false,
                   error: {
                     message: `Error in bulk update: ${result.error}`,
                     code: result.code || "BULK_UPDATE_ERROR"
@@ -2139,9 +2129,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             return {
               content: [{
                 type: "text",
-                text: JSON.stringify({
-                "✏️ BULK UPDATE": true,
-                  success: true,
+                text: "✏️ BULK UPDATE\n\n" + JSON.stringify({
+                success: true,
                   data: result,
                   operation: "xano_bulk_update_records"
                 })
@@ -2154,8 +2143,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             isError: true,
             content: [{
               type: "text",
-              text: JSON.stringify({
-                "✏️ BULK UPDATE": true,
+              text: "✏️ BULK UPDATE\n\n" + JSON.stringify({
                 success: false,
                 error: {
                   message: `Error bulk updating records: ${error.message}`,
@@ -2202,8 +2190,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_list_files",
           {
@@ -2244,8 +2230,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_upload_file",
@@ -2347,8 +2331,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_delete_file",
           {
@@ -2389,8 +2371,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_list_workspace_branches",
           {
@@ -2424,8 +2404,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_delete_workspace_branch",
@@ -2461,8 +2439,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_browse_api_groups",
@@ -2504,8 +2480,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_api_group",
@@ -2565,8 +2539,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_get_api_group",
           {
@@ -2610,8 +2582,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_update_api_group",
@@ -2660,8 +2630,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_delete_api_group",
           {
@@ -2701,8 +2669,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_browse_apis_in_group",
@@ -2745,8 +2711,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_api",
@@ -2798,8 +2762,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_get_api",
           {
@@ -2835,8 +2797,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_update_api",
@@ -2888,8 +2848,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_delete_api",
           {
@@ -2930,8 +2888,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_export_workspace",
@@ -2977,8 +2933,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_export_workspace_schema",
@@ -3027,8 +2981,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_browse_request_history",
           {
@@ -3075,8 +3027,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_truncate_table",
           {
@@ -3118,7 +3068,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                   "Content-Type": "application/json",
                   "x-data-source": "live"  // Required header for truncate
                 },
-                body: JSON.stringify({ reset })
+                body: JSON.stringify({ reset }, null, 2)
               });
 
               if (!response.ok) {
@@ -3156,8 +3106,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_btree_index",
@@ -3222,8 +3170,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_list_functions",
@@ -3316,8 +3262,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_function",
@@ -3434,8 +3378,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_get_function_details",
           {
@@ -3507,8 +3449,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_delete_function",
           {
@@ -3570,8 +3510,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_search_index",
@@ -3638,8 +3576,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_api_with_logic",
@@ -3779,8 +3715,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_create_task",
           {
@@ -3898,8 +3832,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_get_api_with_logic",
           {
@@ -3980,8 +3912,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_update_api_with_logic",
           {
@@ -4049,8 +3979,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_list_tasks",
@@ -4150,8 +4078,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_get_task_details",
           {
@@ -4231,8 +4157,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_delete_task",
           {
@@ -4292,8 +4216,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_publish_function",
@@ -4368,8 +4290,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_publish_api",
@@ -4447,8 +4367,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_publish_task",
           {
@@ -4495,7 +4413,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                     "Monitor task logs for any errors",
                     "Future updates create drafts until published"
                   ],
-                  schedule_info: result.schedule ? `Running on schedule: ${JSON.stringify(result.schedule)}` : "No schedule defined",
+                  schedule_info: result.schedule ? `Running on schedule: ${JSON.stringify(result.schedule, null, 2)}` : "No schedule defined",
                   important: "Published tasks run according to their schedule immediately"
                 }, null, 2) }]
               };
@@ -4523,8 +4441,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_update_function",
@@ -4633,8 +4549,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_update_task",
@@ -4745,8 +4659,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_activate_task",
           {
@@ -4819,8 +4731,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_list_apis_with_logic",
@@ -4913,8 +4823,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_create_table_with_script",
@@ -5070,8 +4978,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
         );
 
-
-
         this.server.tool(
           "xano_get_table_with_script",
           {
@@ -5147,8 +5053,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-
 
         this.server.tool(
           "xano_update_table_with_script",
