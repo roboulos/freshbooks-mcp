@@ -152,7 +152,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "Authentication required to use this tool." }]
+            content: [{ type: "text", text: "🔐 Authentication required to use this tool." }]
           };
         }
         
@@ -187,6 +187,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                emoji: "🗑️ TOKEN CLEANUP",
                 success: true,
                 message: `Deleted ${deletedCount} authentication tokens`,
                 note: "All tokens have been deleted. The next tool call will trigger OAuth re-authentication. You may need to refresh your MCP client or restart the connection.",
@@ -252,6 +253,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                emoji: "🔑 KV STORAGE DEBUG",
                 keyCount: keys.length,
                 keys: keyDetails,
                 propsAccessToken: this.props?.accessToken ? this.props.accessToken.substring(0, 10) + "..." : null
@@ -339,6 +341,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                emoji: "📋 ACTIVE SESSIONS",
                 success: result.success,
                 sessionCount: result.sessions?.length || 0,
                 sessions: result.sessions,
@@ -380,6 +383,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                emoji: "🔧 SESSION CONTROL",
                 action: action,
                 sessionId: sessionId,
                 success: result.success,
@@ -956,7 +960,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: JSON.stringify(result || { success: true, message: "Table updated successfully" })
+              text: JSON.stringify(result || { success: true, message: "✏️ TABLE UPDATED: " + "Table updated successfully" })
             }]
           };
         } catch (error) {
@@ -1038,7 +1042,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               type: "text",
               text: JSON.stringify({
                 success: true,
-                message: "Table deleted successfully",
+                message: "🗑️ TABLE DELETED: " + "Table deleted successfully",
                 operation: "xano_delete_table"
               })
             }]
@@ -1182,6 +1186,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{ 
                 type: "text", 
                 text: JSON.stringify({
+                "➕ FIELD ADDED": true,
                   success: false,
                   error: {
                     message: `Error updating schema: ${result.error}`,
@@ -1197,6 +1202,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "➕ FIELD ADDED": true,
+                emoji: "➕ FIELD ADDED",
                 success: true,
                 data: result || { message: "Field added successfully" },
                 operation: "xano_add_field_to_schema"
@@ -1210,6 +1217,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "➕ FIELD ADDED": true,
                 success: false,
                 error: {
                   message: `Error adding field to schema: ${error.message}`,
@@ -1291,6 +1299,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "✏️ FIELD RENAMED": true,
+                emoji: "✏️ FIELD RENAMED",
                 success: true,
                 data: result || { message: "Field renamed successfully" },
                 operation: "xano_rename_schema_field"
@@ -1304,6 +1314,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "✏️ FIELD RENAMED": true,
                 success: false,
                 error: {
                   message: `Error renaming schema field: ${error.message}`,
@@ -1370,6 +1381,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{ 
                 type: "text", 
                 text: JSON.stringify({
+                "🗑️ FIELD DELETED": true,
                   success: false,
                   error: {
                     message: `Error deleting field: ${result.error}`,
@@ -1386,6 +1398,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "🗑️ FIELD DELETED": true,
                 success: true,
                 data: result,
                 operation: "xano_delete_field"
@@ -1658,6 +1671,8 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "➕ RECORD CREATED": true,
+                emoji: "➕ RECORD CREATED",
                 success: true,
                 data: result,
                 operation: "xano_create_table_record"
@@ -1671,6 +1686,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "➕ RECORD CREATED": true,
                 success: false,
                 error: {
                   message: `Error creating table record: ${error.message}`,
@@ -1879,6 +1895,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "➕ BULK CREATE": true,
                     success: true,
                     message: `Successfully created ${result.success_total} records`,
                     data: {
@@ -1898,6 +1915,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{ 
                 type: "text", 
                 text: JSON.stringify({
+                "➕ BULK CREATE": true,
                   success: false,
                   error: {
                     message: `Error in bulk creation: ${result.error}`,
@@ -1914,6 +1932,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{
                 type: "text",
                 text: JSON.stringify({
+                "➕ BULK CREATE": true,
                   success: true,
                   message: "Records created successfully",
                   affected_count: records.length,
@@ -1929,6 +1948,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{
                 type: "text",
                 text: JSON.stringify({
+                "➕ BULK CREATE": true,
                   success: true,
                   data: result,
                   operation: "xano_bulk_create_records"
@@ -1943,6 +1963,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "➕ BULK CREATE": true,
                 success: false,
                 error: {
                   message: `Error bulk creating records: ${error.message}`,
@@ -2066,6 +2087,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "✏️ BULK UPDATE": true,
                     success: true,
                     message: `Successfully updated ${result.success_total} records`,
                     data: {
@@ -2084,6 +2106,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{
                 type: "text",
                 text: JSON.stringify({
+                "✏️ BULK UPDATE": true,
                   success: true,
                   message: "Records updated successfully",
                   affected_count: updates.length,
@@ -2099,6 +2122,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{ 
                 type: "text", 
                 text: JSON.stringify({
+                "✏️ BULK UPDATE": true,
                   success: false,
                   error: {
                     message: `Error in bulk update: ${result.error}`,
@@ -2116,6 +2140,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               content: [{
                 type: "text",
                 text: JSON.stringify({
+                "✏️ BULK UPDATE": true,
                   success: true,
                   data: result,
                   operation: "xano_bulk_update_records"
@@ -2130,6 +2155,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             content: [{
               type: "text",
               text: JSON.stringify({
+                "✏️ BULK UPDATE": true,
                 success: false,
                 error: {
                   message: `Error bulk updating records: ${error.message}`,
@@ -2350,7 +2376,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `File ${file_id} deleted successfully`,
+                  message: "🗑️ FILE DELETED: " + `File ${file_id} deleted successfully`,
                   data: result,
                   operation: "xano_delete_file"
                 }, null, 2) }]
@@ -2663,7 +2689,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `API group ${api_group_id} deleted successfully`,
+                  message: "🗑️ API GROUP DELETED: " + `API group ${api_group_id} deleted successfully`,
                   data: result,
                   operation: "xano_delete_api_group"
                 }, null, 2) }]
@@ -2892,7 +2918,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `API ${api_id} deleted successfully from group ${api_group_id}`,
+                  message: "🗑️ API DELETED: " + `API ${api_id} deleted successfully from group ${api_group_id}`,
                   data: result,
                   operation: "xano_delete_api"
                 }, null, 2) }]
@@ -2938,7 +2964,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "Workspace export completed successfully",
+                  message: "📤 EXPORT COMPLETE: " + "Workspace export completed successfully",
                   data: result,
                   operation: "xano_export_workspace",
                   note: "Export may include download URL and file information. If include_data was true, table data is included."
@@ -2987,7 +3013,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "Schema export completed successfully",
+                  message: "📤 SCHEMA EXPORTED: " + "Schema export completed successfully",
                   data: result,
                   operation: "xano_export_workspace_schema",
                   note: "Export data may include download URL or file information depending on Xano's response"
@@ -3106,7 +3132,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
                   data: {
-                    message: `Table ${table_id} truncated successfully`,
+                    message: "🧹 TABLE TRUNCATED: " + `Table ${table_id} truncated successfully`,
                     reset_primary_key: reset
                   },
                   operation: "xano_truncate_table"
@@ -3183,6 +3209,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "🔍 INDEX CREATED": true,
                     success: false,
                     error: {
                       message: `Error creating BTree index: ${error.message}`,
@@ -3276,6 +3303,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "⚡ FUNCTIONS": true,
                     success: false,
                     error: {
                       message: `Error listing functions: ${error.message}`,
@@ -3382,6 +3410,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "➕ FUNCTION CREATED": true,
                     success: false,
                     error: {
                       message: `Error creating function: ${error.message}`,
@@ -3464,6 +3493,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "⚡ FUNCTION DETAILS": true,
                     success: false,
                     error: {
                       message: `Error getting function details: ${error.message}`,
@@ -3516,7 +3546,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
                   data: {
-                    message: `Function ${function_id} deleted successfully`,
+                    message: "🗑️ FUNCTION DELETED: " + `Function ${function_id} deleted successfully`,
                     response: result
                   },
                   operation: "xano_delete_function"
@@ -3595,6 +3625,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "🔍 SEARCH INDEX": true,
                     success: false,
                     error: {
                       message: `Error creating search index: ${error.message}`,
@@ -3695,7 +3726,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "API endpoint created successfully with full XanoScript logic",
+                  message: "🚀 API CREATED: " + "API endpoint created successfully with full XanoScript logic",
                   data: result,
                   operation: "xano_create_api_with_logic",
                   endpoint_url: result.endpoint ? `${instance_name}.xano.io${result.endpoint}` : "Check API group for endpoint URL",
@@ -3817,7 +3848,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "Background task created successfully with full XanoScript logic",
+                  message: "➕ TASK CREATED: " + "Background task created successfully with full XanoScript logic",
                   data: result,
                   operation: "xano_create_task",
                   RELIABILITY_STATUS: "⚠️ Tasks have mixed results - some variables work, some don't",
@@ -3935,6 +3966,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "🔌 API LOGIC": true,
                     success: false,
                     error: {
                       message: `Error getting API with logic: ${error.message}`,
@@ -3994,7 +4026,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "API logic updated successfully",
+                  message: "✏️ API UPDATED: " + "API logic updated successfully",
                   data: result,
                   operation: "xano_update_api_with_logic"
                 }, null, 2) }]
@@ -4104,6 +4136,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "⏰ TASKS": true,
                     success: false,
                     error: {
                       message: `Error listing tasks: ${error.message}`,
@@ -4184,6 +4217,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "⏰ TASK DETAILS": true,
                     success: false,
                     error: {
                       message: `Error getting task details: ${error.message}`,
@@ -4235,7 +4269,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `Task ${task_id} deleted successfully`,
+                  message: "🗑️ TASK DELETED: " + `Task ${task_id} deleted successfully`,
                   data: result,
                   operation: "xano_delete_task"
                 }, null, 2) }]
@@ -4298,7 +4332,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `Function ${function_id} published to live successfully`,
+                  message: "🚀 FUNCTION PUBLISHED: " + `Function ${function_id} published to live successfully`,
                   data: result,
                   operation: "xano_publish_function",
                   workflow_tips: [
@@ -4375,7 +4409,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `API ${api_id} published to live successfully`,
+                  message: "🚀 API PUBLISHED: " + `API ${api_id} published to live successfully`,
                   data: result,
                   operation: "xano_publish_api",
                   endpoint_info: result.endpoint ? `Live at: ${instance_name}.xano.io${result.endpoint}` : "Check API group for endpoint",
@@ -4452,7 +4486,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `Task ${task_id} published to live successfully`,
+                  message: "🚀 TASK PUBLISHED: " + `Task ${task_id} published to live successfully`,
                   data: result,
                   operation: "xano_publish_task",
                   workflow_tips: [
@@ -4554,7 +4588,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `Function ${function_id} updated as draft successfully`,
+                  message: "✏️ FUNCTION UPDATED: " + `Function ${function_id} updated as draft successfully`,
                   data: result,
                   operation: "xano_update_function",
                   draft_status: "Changes saved as draft - NOT live yet",
@@ -4661,7 +4695,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `Task ${task_id} updated as draft successfully`,
+                  message: "✏️ TASK UPDATED: " + `Task ${task_id} updated as draft successfully`,
                   data: result,
                   operation: "xano_update_task",
                   draft_status: "Changes saved as draft - NOT live yet",
@@ -4750,7 +4784,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: `Task ${task_id} ${active ? 'activated' : 'deactivated'} successfully`,
+                  message: "🔄 TASK STATUS: " + `Task ${task_id} ${active ? 'activated' : 'deactivated'} successfully`,
                   data: result,
                   operation: "xano_activate_task",
                   status: active ? "Task is now running on schedule" : "Task is paused and won't run",
@@ -4866,6 +4900,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "🔌 API LIST": true,
                     success: false,
                     error: {
                       message: `Error listing APIs: ${error.message}`,
@@ -4979,7 +5014,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "Table created successfully with XanoScript",
+                  message: "🏗️ TABLE CREATED: " + "Table created successfully with XanoScript",
                   data: result,
                   operation: "xano_create_table_with_script",
                   table_info: {
@@ -5099,6 +5134,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
+                "🏗️ TABLE SCHEMA": true,
                     success: false,
                     error: {
                       message: `Error getting table schema: ${error.message}`,
@@ -5152,7 +5188,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: JSON.stringify({
                   success: true,
-                  message: "Table schema updated successfully",
+                  message: "✏️ SCHEMA UPDATED: " + "Table schema updated successfully",
                   data: result,
                   operation: "xano_update_table_with_script",
                   migration_notes: [
