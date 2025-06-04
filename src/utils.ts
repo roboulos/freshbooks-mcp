@@ -294,26 +294,20 @@ export async function makeApiRequest(url: string, token: string, method = "GET",
 
 // Utility to get meta API URL for an instance
 export function getMetaApiUrl(instanceName: string): string {
+  // Import here to avoid circular dependency
+  const { normalizeInstanceName } = require('./smart-error');
+  
+  // Normalize and validate instance name
+  const normalizedInstance = normalizeInstanceName(instanceName);
+  
   // If it's already a full URL, just append the API path
-  if (instanceName.startsWith("http://") || instanceName.startsWith("https://")) {
-    return `${instanceName}/api:meta`;
+  if (normalizedInstance.startsWith("http://") || normalizedInstance.startsWith("https://")) {
+    return `${normalizedInstance}/api:meta`;
   } 
-  // If it contains a dot, assume it's a full domain (like xivz-2uos-g8gq.n7.xano.io or api.clearleads.io)
-  else if (instanceName.includes(".")) {
-    // Remove any trailing slashes
-    const cleanInstance = instanceName.replace(/\/$/, "");
-    return `https://${cleanInstance}/api:meta`;
-  } 
-  // If it's just the instance ID without domain, we can't determine the correct subdomain
-  else {
-    console.warn(
-      `⚠️ Instance name '${instanceName}' provided without domain. ` +
-      `Please provide the full domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io'). ` +
-      `Defaulting to n7c.xano.io which may cause SSL errors for some instances.`
-    );
-    // Default to n7c for backward compatibility, but this may cause SSL errors
-    return `https://${instanceName}.n7c.xano.io/api:meta`;
-  }
+  
+  // Otherwise, it's a domain - ensure https and add API path
+  const cleanInstance = normalizedInstance.replace(/\/$/, "");
+  return `https://${cleanInstance}/api:meta`;
 }
 
 // Format ID for Xano API (accept string or number)

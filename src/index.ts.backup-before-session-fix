@@ -4,7 +4,8 @@ import { z } from "zod";
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { XanoHandler } from "./xano-handler";
 import { makeApiRequest, getMetaApiUrl, formatId, Props } from "./utils";
-import { SmartError, resolveTableId, normalizeTableIdentifier } from "./smart-error";
+import { XanoSessionManager } from "./xano-session-manager";
+import { SmartError } from "./smart-error";
 
 // Use the Props type from utils.ts as XanoAuthProps
 export type XanoAuthProps = Props;
@@ -96,9 +97,11 @@ async function enableWorkerSession(sessionId: string, env: Env): Promise<{succes
 
 // Define MCP agent for Xano
 export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
+  private sessionManager: XanoSessionManager | null = null;
+  
   server = new McpServer({
     name: "Snappy MCP Server",
-    version: "1.0.0",
+    version: "2.0.0",
   });
   
   
@@ -109,10 +112,22 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return this.props?.apiKey || null;
   }
 
+  private async getSession(): Promise<XanoSessionManager> {
+    if (!this.sessionManager) {
+      console.log('[Session] Creating new session manager');
+      
+      this.sessionManager = new XanoSessionManager(this.env, this.props || {
+        authenticated: false,
+        sessionId: 'anonymous'
+      } as XanoAuthProps);
+      await this.sessionManager.initialize();
+    }
+    return this.sessionManager;
+  }
 
   async init() {
     
-    // 🔍 Debug tool to see what props are available
+    // Debug tool to see what props are available
     this.server.tool(
       "debug_auth",
       {},
@@ -140,6 +155,120 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }, null, 2)
           }]
         };
+      }
+    );
+
+    // Session Management Tools
+    this.server.tool(
+      "xano_set_context",
+      {
+        instance_name: z.string()
+          .optional()
+          .describe("Instance name (auto-completes domain)"),
+        workspace_id: z.number()
+          .optional()
+          .describe("Workspace ID to use as default")
+      },
+      async (params) => {
+        try {
+          if (!this.props?.authenticated) {
+            throw SmartError.authRequired();
+          }
+          
+          const session = await this.getSession();
+          
+          // Auto-complete instance name
+          if (params.instance_name && !params.instance_name.includes('.')) {
+            const patterns = ['.n7c.xano.io', '.n7.xano.io', '.xano.io'];
+            for (const pattern of patterns) {
+              const full = params.instance_name + pattern;
+              if (full.match(/^[a-z0-9-]+\.(n7c?\.)?xano\.io$/)) {
+                params.instance_name = full;
+                break;
+              }
+            }
+          }
+          
+          await session.setContext(params);
+          
+          let instance, workspace;
+          try {
+            instance = session.getInstanceName();
+          } catch {}
+          try {
+            workspace = session.getWorkspaceId();
+          } catch {}
+          
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                context: {
+                  instance,
+                  workspace,
+                  message: "Context set! All subsequent commands will use these defaults."
+                },
+                tips: [
+                  "You no longer need to specify instance_name or workspace_id",
+                  "Use xano_get_context to see current settings"
+                ]
+              }, null, 2)
+            }]
+          };
+        } catch (error: any) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                error: error.message,
+                suggestion: error.suggestion || "Check error and try again",
+                example: error.example || ""
+              }, null, 2)
+            }]
+          };
+        }
+      }
+    );
+
+    this.server.tool(
+      "xano_get_context",
+      {},
+      async () => {
+        try {
+          const session = await this.getSession();
+          const sessionData = session.getSession();
+          
+          let instance, workspace;
+          try {
+            instance = session.getInstanceName();
+          } catch {}
+          try {
+            workspace = session.getWorkspaceId();
+          } catch {}
+          
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                instance,
+                workspace,
+                cached_tables: sessionData?.tableNameCache.size || 0,
+                session_age_minutes: sessionData ? 
+                  Math.floor((Date.now() - sessionData.lastAccessed) / 60000) : 0
+              }, null, 2)
+            }]
+          };
+        } catch (error: any) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                error: error.message
+              }, null, 2)
+            }]
+          };
+        }
       }
     );
     
@@ -399,7 +528,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // 👋 Register hello tool
+    // Register hello tool
     this.server.tool(
       "hello",
       { name: z.string() },
@@ -417,7 +546,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // 🏢 List Xano instances
+    // List Xano instances
     this.server.tool(
       "xano_list_instances",
       {},
@@ -430,7 +559,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "🏢 Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -439,7 +568,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
         if (!token) {
           return {
-            content: [{ type: "text", text: "🏢 API key not available. Please ensure you are authenticated." }]
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
           };
         }
 
@@ -449,14 +578,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `🏢 Error: ${result.error}` }]
+              content: [{ type: "text", text: `Error: ${result.error}` }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: "🏢 Xano Instances:\n" + JSON.stringify({ instances: result }, null, 2)
+              text: JSON.stringify({ instances: result })
             }]
           };
         } catch (error) {
@@ -505,7 +634,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: "🏗️ Instance Details:\n" + JSON.stringify(details, null, 2)
+              text: JSON.stringify(details)
             }]
           };
         } catch (error) {
@@ -520,7 +649,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // 💾 List databases
+    // List databases
     this.server.tool(
       "xano_list_databases",
       {
@@ -557,7 +686,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: "💾 Xano Databases:\n" + JSON.stringify({ databases: result }, null, 2)
+              text: JSON.stringify({ databases: result })
             }]
           };
         } catch (error) {
@@ -572,7 +701,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // 🏗️ Get workspace details
+    // Get workspace details
     this.server.tool(
       "xano_get_workspace_details",
       {
@@ -603,14 +732,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `❌ Error: ${result.error}` }]
+              content: [{ type: "text", text: `Error: ${result.error}` }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: "🗂️ Workspace Details:\n" + JSON.stringify(result, null, 2)
+              text: JSON.stringify(result)
             }]
           };
         } catch (error) {
@@ -625,24 +754,28 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // 📋 List tables
+    // List tables
     this.server.tool(
       "xano_list_tables",
       {
-        instance_name: z.string().describe("Xano instance (e.g., 'xnwv-v1z6-dvnr'). Domain extension added automatically."),
-        database_id: z.union([z.string(), z.number()]).describe("Workspace/database ID. Use xano_list_databases to find workspace IDs.")
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
+        database_id: z.union([z.string(), z.number()]).describe("The ID of the Xano workspace/database")
       },
       async ({ instance_name, database_id }) => {
         // Check authentication
         if (!this.props?.authenticated) {
-          return SmartError.authenticationFailed().toMCPResponse();
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
         }
 
         // Use fresh API key from KV storage
         const token = await this.getFreshApiKey();
 
         if (!token) {
-          return SmartError.authenticationFailed().toMCPResponse();
+          return {
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
+          };
         }
 
         try {
@@ -651,41 +784,25 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
-            return new SmartError(
-              "Failed to list tables", 
-              "Check your workspace ID and permissions",
-              {
-                tip: "Use xano_list_databases to verify workspace ID",
-                relatedTools: ["xano_list_databases", "xano_get_workspace_details"]
-              }
-            ).toMCPResponse();
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }]
+            };
           }
 
           return {
             content: [{
               type: "text",
-              text: `📋 Tables in Workspace ${database_id}:\n` + JSON.stringify({ 
-                tables: result,
-                summary: `Found ${Array.isArray(result) ? result.length : 0} tables`
-              }, null, 2)
+              text: JSON.stringify({ tables: result })
             }]
           };
         } catch (error) {
           console.error(`Error listing tables: ${error.message}`);
-          
-          // Handle SmartError instances
-          if (error instanceof SmartError) {
-            return error.toMCPResponse();
-          }
-          
-          return new SmartError(
-            "Failed to list tables",
-            "An unexpected error occurred",
-            {
-              tip: error.message,
-              relatedTools: ["xano_list_databases"]
-            }
-          ).toMCPResponse();
+          return {
+            content: [{
+              type: "text",
+              text: `Error listing tables: ${error.message}`
+            }]
+          };
         }
       }
     );
@@ -725,14 +842,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `❌ Error: ${result.error}` }]
+              content: [{ type: "text", text: `Error: ${result.error}` }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: "📋 Table Details:\n" + JSON.stringify(result, null, 2)
+              text: JSON.stringify(result)
             }]
           };
         } catch (error) {
@@ -806,11 +923,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: "🔧 Table Schema:\n" + JSON.stringify({
+              text: JSON.stringify({
                 success: true,
                 data: { schema: result },
                 operation: "xano_get_table_schema"
-              }, null, 2)
+              })
             }]
           };
         } catch (error) {
@@ -885,7 +1002,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: "📊 Table Created Successfully:\n" + JSON.stringify(result, null, 2)
+              text: JSON.stringify(result)
             }]
           };
         } catch (error) {
@@ -917,7 +1034,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "✏️ Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -992,7 +1109,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "🗑️ Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1097,7 +1214,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "➕ Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1246,7 +1363,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "✏️ Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1330,7 +1447,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "❌ Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1404,88 +1521,36 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
       }
     );
 
-    // 📊 Browse table content
+    // Browse table content
     this.server.tool(
       "xano_browse_table_content",
       {
-        instance_name: z.string().describe("Xano instance (e.g., 'xnwv-v1z6-dvnr'). Domain extension added automatically."),
-        workspace_id: z.union([z.string(), z.number()]).describe("Workspace/database ID. Use xano_list_databases to find workspace IDs."),
-        table_id: z.union([z.string(), z.number()]).optional().describe("Table ID (e.g., 70). Use table parameter instead for easier access."),
-        table: z.string().optional().describe("Table name as alternative to table_id (e.g., 'users' or '👤 users')"),
+        instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
+        workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
+        table_id: z.union([z.string(), z.number()]).describe("The ID of the table"),
         page: z.number().optional().describe("Page number (default: 1)"),
         per_page: z.number().optional().describe("Number of records per page (default: 50)")
       },
-      async ({ instance_name, workspace_id, table_id, table, page, per_page }) => {
+      async ({ instance_name, workspace_id, table_id, page, per_page }) => {
         // Check authentication
         if (!this.props?.authenticated) {
-          return SmartError.authenticationFailed().toMCPResponse();
-        }
-
-        // Validate table identifier
-        if (!table_id && !table) {
-          return new SmartError(
-            "Table identifier required",
-            "Provide either table_id or table parameter",
-            {
-              correct: 'table: "users" or table_id: 70',
-              tip: "Using table names is easier than looking up IDs",
-              relatedTools: ["xano_list_tables"]
-            }
-          ).toMCPResponse();
+          return {
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
+          };
         }
 
         // Use fresh API key from KV storage
         const token = await this.getFreshApiKey();
 
         if (!token) {
-          return SmartError.authenticationFailed().toMCPResponse();
+          return {
+            content: [{ type: "text", text: "API key not available. Please ensure you are authenticated." }]
+          };
         }
 
         try {
-          let resolvedTableId = table_id;
-
-          // If table name provided, resolve to ID
-          if (table && !table_id) {
-            // Simple table name resolution - fetch tables and match
-            const metaApiForTables = getMetaApiUrl(instance_name);
-            const tablesUrl = `${metaApiForTables}/workspace/${formatId(workspace_id)}/table`;
-            const tablesResult = await makeApiRequest(tablesUrl, token, "GET", undefined, this.env);
-            
-            if (tablesResult.error) {
-              return new SmartError(
-                `Cannot resolve table name '${table}'`,
-                "Failed to fetch tables list",
-                {
-                  tip: "Check workspace ID and permissions",
-                  relatedTools: ["xano_list_tables"]
-                }
-              ).toMCPResponse();
-            }
-            
-            const tables = Array.isArray(tablesResult) ? tablesResult : [];
-            const match = tables.find(t => 
-              t.name === table || 
-              t.name.toLowerCase() === table.toLowerCase() ||
-              t.name.replace(/^.+?\s/, '') === table ||
-              t.name.replace(/^.+?\s/, '').toLowerCase() === table.toLowerCase()
-            );
-            
-            if (!match) {
-              return new SmartError(
-                `Table '${table}' not found`,
-                "Check the table name spelling",
-                {
-                  tip: `Available tables: ${tables.slice(0, 3).map(t => t.name).join(', ')}...`,
-                  relatedTools: ["xano_list_tables"]
-                }
-              ).toMCPResponse();
-            }
-            
-            resolvedTableId = match.id;
-          }
-
           const metaApi = getMetaApiUrl(instance_name);
-          const baseUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(resolvedTableId)}/content`;
+          const baseUrl = `${metaApi}/workspace/${formatId(workspace_id)}/table/${formatId(table_id)}/content`;
           
           // Add pagination parameters to URL
           const params = new URLSearchParams();
@@ -1496,46 +1561,25 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           const result = await makeApiRequest(url, token, "GET", undefined, this.env);
 
           if (result.error) {
-            return new SmartError(
-              "Failed to browse table content",
-              "Check table ID/name and permissions",
-              {
-                tip: result.error,
-                relatedTools: ["xano_list_tables", "xano_get_table_details"]
-              }
-            ).toMCPResponse();
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }]
+            };
           }
 
           return {
             content: [{
               type: "text",
-              text: `📊 Table Content (${table || `Table ID ${resolvedTableId}`}):\n` + JSON.stringify({
-                ...result,
-                metadata: {
-                  table: table || `Table ID ${resolvedTableId}`,
-                  workspace: workspace_id,
-                  page: page || 1,
-                  per_page: per_page || 50
-                }
-              }, null, 2)
+              text: JSON.stringify(result)
             }]
           };
         } catch (error) {
           console.error(`Error browsing table content: ${error.message}`);
-          
-          // Handle SmartError instances
-          if (error instanceof SmartError) {
-            return error.toMCPResponse();
-          }
-          
-          return new SmartError(
-            "Failed to browse table content",
-            "An unexpected error occurred",
-            {
-              tip: error.message,
-              relatedTools: ["xano_list_tables"]
-            }
-          ).toMCPResponse();
+          return {
+            content: [{
+              type: "text",
+              text: `Error browsing table content: ${error.message}`
+            }]
+          };
         }
       }
     );
@@ -1555,7 +1599,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "📄 Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1619,7 +1663,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "📝 Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1698,7 +1742,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "📝 Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1753,7 +1797,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "❌ Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1822,7 +1866,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "📋 Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -1981,7 +2025,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         // Check authentication
         if (!this.props?.authenticated) {
           return {
-            content: [{ type: "text", text: "🔄 Authentication required to use this tool." }]
+            content: [{ type: "text", text: "Authentication required to use this tool." }]
           };
         }
 
@@ -2166,7 +2210,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
-                content: [{ type: "text", text: "🔐 User Authentication Info:\n" + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2189,7 +2233,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, page = 1, per_page = 50 }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📁 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2224,16 +2268,15 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_upload_file",
           {
-            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             file_name: z.string().describe("Name of the file to upload"),
             file_content: z.string().describe("Base64 encoded file content"),
             folder: z.string().optional().describe("Folder path to upload to")
           },
-          async ({ instance_name, workspace_id, file_name, file_content, folder }) => {
+          async ({ workspace_id, file_name, file_content, folder }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📤 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2333,7 +2376,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, file_id }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🗑️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2374,7 +2417,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🌿 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2411,7 +2454,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, branch_name }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🌿 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2449,7 +2492,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, page = 1, per_page = 50 }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📂 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2484,7 +2527,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_api_group",
           {
-            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             branch: z.string().optional().describe("Branch name"),
             name: z.string().describe("The name of the new API group"),
@@ -2495,17 +2537,17 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           },
           {
             annotations: {
-              title: "📁 Create API Group",
+              title: "Create API Group",
               readOnlyHint: false,
               destructiveHint: false,
               idempotentHint: false,
               openWorldHint: true
             }
           },
-          async ({ instance_name, workspace_id, branch, name, description, docs, swagger, tag }) => {
+          async ({ workspace_id, branch, name, description, docs, swagger, tag }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📁 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2560,7 +2602,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, api_group_id }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📂 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2590,7 +2632,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_update_api_group",
           {
-            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             name: z.string().optional().describe("New name for the API group"),
@@ -2599,10 +2640,10 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             swagger: z.boolean().optional().describe("Enable swagger"),
             tag: z.array(z.string()).optional().describe("Tags")
           },
-          async ({ instance_name, workspace_id, api_group_id, name, description, docs, swagger, tag }) => {
+          async ({ workspace_id, api_group_id, name, description, docs, swagger, tag }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📝 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2646,7 +2687,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, api_group_id}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🗑️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2690,7 +2731,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, api_group_id, page = 1, per_page = 50}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📄 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2725,7 +2766,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_create_api",
           {
-            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             name: z.string().describe("The name of the new API"),
@@ -2735,10 +2775,10 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             docs: z.string().optional().describe("Documentation"),
             tag: z.array(z.string()).optional().describe("Tags")
           },
-          async ({ instance_name, workspace_id, api_group_id, name, description, verb, path, docs, tag }) => {
+          async ({ workspace_id, api_group_id, name, description, verb, path, docs, tag }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🆕 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2785,7 +2825,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, api_group_id, api_id}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📄 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2815,7 +2855,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
         this.server.tool(
           "xano_update_api",
           {
-            instance_name: z.string().describe("The Xano instance domain (e.g., 'xivz-2uos-g8gq.n7.xano.io' or 'api.clearleads.io')"),
             workspace_id: z.union([z.string(), z.number()]).describe("The ID of the workspace"),
             api_group_id: z.union([z.string(), z.number()]).describe("The ID of the API group"),
             api_id: z.union([z.string(), z.number()]).describe("The ID of the API"),
@@ -2826,10 +2865,10 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             docs: z.string().optional().describe("Documentation"),
             tag: z.array(z.string()).optional().describe("Tags")
           },
-          async ({ instance_name, workspace_id, api_group_id, api_id, name, description, verb, path, docs, tag }) => {
+          async ({ workspace_id, api_group_id, api_id, name, description, verb, path, docs, tag }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🔄 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2875,7 +2914,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, api_group_id, api_id}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🗑️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2917,7 +2956,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, include_data = false}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📦 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -2965,7 +3004,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, branch, password}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📋 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3016,7 +3055,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({instance_name, workspace_id, page = 1, per_page = 50, start_date, end_date}) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📈 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3071,7 +3110,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, table_id, reset = false }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🗑️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3156,7 +3195,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, table_id, fields }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🗂️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3223,7 +3262,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, branch, include_draft, page = 1, per_page = 50, search, sort, order }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "⚙️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3339,7 +3378,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, branch, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "⚙️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3364,15 +3403,13 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                   success: true,
                   data: result,
                   operation: "xano_create_function",
-                  RELIABILITY_STATUS: "⚠️ Functions may have variable quoting issues - structure works but check syntax",
-                  functionality_level: "Partial - core logic works, variables may need manual fixing",
                   tips: [
                     "Functions use 'function name { }' syntax",
                     "Input fields: email, text, int, bool, decimal, timestamp",
                     "Use precondition for validation",
-                    "⚠️ KNOWN ISSUE: Variables may become quoted strings in response block",
-                    "Always verify syntax with xano_get_function_details after creation",
-                    "Compare with working functions to fix variable references"
+                    "Use api.request for external calls",
+                    "Variables assigned with 'as $varname'",
+                    "Response must be in response { value = ... } block"
                   ]
                 }, null, 2) }]
               };
@@ -3427,7 +3464,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, function_id, include_draft }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "⚙️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3498,7 +3535,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, function_id }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "❌ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3568,7 +3605,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, table_id, name, fields, lang = "english" }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🔍 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3673,7 +3710,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, api_group_id, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🧠 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3699,23 +3736,12 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                   data: result,
                   operation: "xano_create_api_with_logic",
                   endpoint_url: result.endpoint ? `${instance_name}.xano.io${result.endpoint}` : "Check API group for endpoint URL",
-                  RELIABILITY_STATUS: "✅ APIs work perfectly! ⚠️ Functions/tasks may have variable issues",
-                  demo_ready_features: [
-                    "✅ API endpoints (queries) - fully functional and demo-ready",
-                    "✅ Complex business logic with preconditions and validation", 
-                    "✅ Database operations and external API integrations",
-                    "✅ Multi-step workflows and dynamic responses"
-                  ],
-                  known_limitations: [
-                    "⚠️ Functions: Variables may become quoted strings (structure works)",
-                    "⚠️ Tasks: Mixed results - some variables work, some don't"
-                  ],
-                  verification_tip: "Use xano_get_api_with_logic to verify syntax after creation",
                   tips: [
                     "APIs use 'query name verb=METHOD { }' syntax",
-                    "Variables should be $input.field NOT \"field\"",
-                    "Objects use colons: { success: true } not { success = true }",
-                    "Response should have: lead_id: $new_lead.id NOT lead_id: \"new_lead\""
+                    "Available verbs: GET, POST, PUT, DELETE, PATCH",
+                    "Input parameters become API parameters/body",
+                    "Use sprintf for string formatting: \"%s %s\"|sprintf:$var1:$var2",
+                    "Response block returns JSON to API caller"
                   ]
                 }, null, 2) }]
               };
@@ -3794,7 +3820,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, branch, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📋 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3820,15 +3846,13 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
                   message: "Background task created successfully with full XanoScript logic",
                   data: result,
                   operation: "xano_create_task",
-                  RELIABILITY_STATUS: "⚠️ Tasks have mixed results - some variables work, some don't",
-                  functionality_level: "Partial - basic structure works, variable behavior unpredictable",
                   tips: [
                     "Tasks use 'task \"name\" { }' syntax with quoted name",
                     "Required blocks: active, history, schedule",
                     "Schedule events use cron expressions: \"0 */5 * * *\" = every 5 min",
-                    "⚠️ KNOWN ISSUE: Variable handling inconsistent in tasks",
-                    "Always test with xano_get_task_details after creation",
-                    "Consider using simpler logic in tasks vs functions/APIs"
+                    "No input or response blocks (tasks run in background)",
+                    "Use api.request for external integrations",
+                    "active = true to enable, false to disable"
                   ]
                 }, null, 2) }]
               };
@@ -3891,7 +3915,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, api_group_id, api_id, include_draft, type }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🧠 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -3972,7 +3996,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, api_group_id, api_id, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🧠 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4045,7 +4069,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, branch, include_draft, page = 1, per_page = 50, search, sort, order }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📋 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4140,7 +4164,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, task_id, include_draft, type }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📋 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4218,7 +4242,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, task_id }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🗑️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4281,7 +4305,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, function_id, type = "xs" }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🚀 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4358,7 +4382,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, api_group_id, api_id, type = "xs" }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🚀 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4435,7 +4459,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, task_id, type = "xs" }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🚀 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4537,7 +4561,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, function_id, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "⚙️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4644,7 +4668,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, task_id, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📝 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4733,7 +4757,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, task_id, active }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "▶️ Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4817,7 +4841,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "🧠 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -4962,7 +4986,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📊 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -5057,7 +5081,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, table_id, type = "xs" }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📊 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -5135,7 +5159,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           async ({ instance_name, workspace_id, table_id, type = "xs", script }) => {
             if (!this.props?.authenticated) {
               return {
-                content: [{ type: "text", text: "📊 Authentication required to use this tool." }]
+                content: [{ type: "text", text: "Authentication required to use this tool." }]
               };
             }
 
@@ -5192,774 +5216,6 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
             }
           }
         );
-
-    // ===========================
-    // XANOSCRIPT BUILDING GUIDANCE TOOLS
-    // ===========================
-    
-    // 🧱 Get XanoScript function template
-    this.server.tool(
-      "xano_get_function_template",
-      {
-        function_name: z.enum(["db.query", "db.get", "db.add", "db.edit", "db.del", "var", "var.update", "api.request", "foreach", "conditional", "precondition"]).describe("XanoScript function to get template for")
-      },
-      async ({ function_name }) => {
-        // Check if user has proper setup context
-        if (!this.props?.authenticated) {
-          return new SmartError(
-            "Authentication required",
-            "You need to authenticate before using XanoScript tools",
-            {
-              tip: "Start with proper setup to use XanoScript tools effectively",
-              relatedTools: ["xano_list_instances", "xano_list_databases", "xano_list_tables"],
-              correct: "1. xano_list_instances\n2. xano_list_databases\n3. xano_list_tables\n4. Then use XanoScript tools"
-            }
-          ).toMCPResponse();
-        }
-
-        try {
-          const template = this.getFunctionTemplate(function_name);
-          
-          return {
-            content: [{
-              type: "text",
-              text: `🧱 ${function_name} Template:\n\n${template.syntax}\n\n📝 Description: ${template.description}\n\n💡 Common Parameters:\n${template.parameters.map(p => `• ${p}`).join('\n')}\n\n⚠️ Notes:\n${template.notes.map(n => `• ${n}`).join('\n')}\n\n🚀 Setup Reminder: Make sure you have:\n• Instance name (from xano_list_instances)\n• Workspace ID (from xano_list_databases)\n• Table names (from xano_list_tables)`
-            }]
-          };
-        } catch (error) {
-          return new SmartError(
-            "Template not found",
-            `Template for function '${function_name}' not available`,
-            {
-              availableOptions: ["db.query", "db.get", "db.add", "db.edit", "db.del", "var", "var.update", "api.request", "foreach", "conditional", "precondition"]
-            }
-          ).toMCPResponse();
-        }
-      }
-    );
-
-    // 📋 Get XanoScript block template
-    this.server.tool(
-      "xano_get_block_template",
-      {
-        block_name: z.enum(["query", "function", "task", "input", "stack", "response"]).describe("XanoScript block to get template for")
-      },
-      async ({ block_name }) => {
-        // Check if user has proper setup context
-        if (!this.props?.authenticated) {
-          return new SmartError(
-            "Authentication required",
-            "You need to authenticate before using XanoScript tools",
-            {
-              tip: "Start with proper setup to use XanoScript tools effectively",
-              relatedTools: ["xano_list_instances", "xano_list_databases", "xano_list_tables"],
-              correct: "1. xano_list_instances\n2. xano_list_databases\n3. xano_list_tables\n4. Then use XanoScript tools"
-            }
-          ).toMCPResponse();
-        }
-
-        try {
-          const template = this.getBlockTemplate(block_name);
-          
-          return {
-            content: [{
-              type: "text",
-              text: `📋 ${block_name} Block Template:\n\n${template.syntax}\n\n📝 Description: ${template.description}\n\n💡 Usage:\n${template.usage.map(u => `• ${u}`).join('\n')}\n\n✅ Example:\n${template.example}\n\n🚀 Setup Reminder: Make sure you have:\n• Instance name (from xano_list_instances)\n• Workspace ID (from xano_list_databases)\n• Table names (from xano_list_tables)`
-            }]
-          };
-        } catch (error) {
-          return new SmartError(
-            "Block template not found",
-            `Template for block '${block_name}' not available`,
-            {
-              availableOptions: ["query", "function", "task", "input", "stack", "response"]
-            }
-          ).toMCPResponse();
-        }
-      }
-    );
-
-    // 🚀 XanoScript setup guide
-    this.server.tool(
-      "xano_get_started",
-      {},
-      async () => {
-        return {
-          content: [{
-            type: "text",
-            text: `🚀 XanoScript Development Setup Guide
-
-Before using XanoScript tools, you need proper context. Follow these steps:
-
-📋 REQUIRED SETUP SEQUENCE:
-1. 🏢 xano_list_instances - Get your Xano instances
-2. 💾 xano_list_databases - Pick instance, get workspaces  
-3. 📊 xano_list_tables - Pick workspace, see available tables
-
-🧱 THEN USE XANOSCRIPT TOOLS:
-• xano_get_block_template - Get API/function structure
-• xano_get_function_template - Get specific function syntax
-• xano_validate_line - Check syntax before proceeding
-
-🎯 METHODOLOGY:
-1. Start with block template (query/function shell)
-2. Add input definitions
-3. Build logic one line at a time using function templates
-4. Validate each line before moving to next
-5. No "throwing code at the wall" - methodical building only!
-
-⚡ QUICK START:
-Try: xano_list_instances → pick one → xano_list_databases
-
-This approach eliminates trial-and-error XanoScript development!`
-          }]
-        };
-      }
-    );
-
-    // 🔧 Validate single XanoScript line
-    this.server.tool(
-      "xano_validate_line",
-      {
-        line_of_script: z.string().describe("Single line or small block of XanoScript to validate"),
-        context: z.string().optional().describe("Context where this line appears (e.g., 'inside stack block', 'in response')")
-      },
-      async ({ line_of_script, context }) => {
-        try {
-          const validation = this.validateSingleLine(line_of_script, context);
-          
-          return {
-            content: [{
-              type: "text",
-              text: `🔧 Line Validation:\n\n${validation.valid ? '✅' : '❌'} ${validation.valid ? 'Valid' : 'Invalid'}\n\n${validation.issues.length > 0 ? '⚠️ Issues:\n' + validation.issues.map(i => `• ${i}`).join('\n') + '\n\n' : ''}${validation.suggestions.length > 0 ? '💡 Suggestions:\n' + validation.suggestions.map(s => `• ${s}`).join('\n') : ''}`
-            }]
-          };
-        } catch (error) {
-          return new SmartError(
-            "Line validation failed",
-            "Unable to validate XanoScript line",
-            {
-              tip: error.message,
-              relatedTools: ["xano_get_function_template"]
-            }
-          ).toMCPResponse();
-        }
-      }
-    );
-  }
-
-  // XanoScript building guidance helper methods
-  private getFunctionTemplate(functionName: string) {
-    const templates = {
-      "db.query": {
-        syntax: `db.query "table_name" {
-  search = \`$db.table_name.field == "value"\`
-  return_list = {
-    paging: { page: 1, per_page: 25 },
-    sorting: [{ sort: "field_name", order: "asc" }]
-  }
-} as $result`,
-        description: "Query multiple records from database table",
-        parameters: [
-          "search: Expression with backticks for filtering",
-          "return_list/return_single/return_exists/return_count: Return type",
-          "paging: { page: number, per_page: number }",
-          "sorting: [{ sort: 'field', order: 'asc'|'desc' }]"
-        ],
-        notes: [
-          "Always use backticks around search expressions",
-          "Access results with $result.rows[0].field for lists",
-          "Use $db.table_name.field in search expressions"
-        ]
-      },
-      "db.get": {
-        syntax: `db.get "table_name" {
-  field_name = "id"
-  field_value = $input.id
-  lock = false
-} as $record`,
-        description: "Get single record by field value",
-        parameters: [
-          "field_name: Field to search by (usually 'id')",
-          "field_value: Value to match",
-          "lock: true/false for row locking"
-        ],
-        notes: [
-          "Returns single record object",
-          "Access fields directly: $record.field_name",
-          "Returns null if not found"
-        ]
-      },
-      "db.add": {
-        syntax: `db.add "table_name" {
-  data = {
-    field1: $input.value1,
-    field2: "literal_value", 
-    created_at: "now"
-  }
-} as $new_record`,
-        description: "Insert new record into table",
-        parameters: [
-          "data: Object with field: value pairs using COLONS",
-          "CRITICAL: Use colon (:) not equals (=) inside objects",
-          "Variables: $input.field or quoted strings for field names"
-        ],
-        notes: [
-          "Returns the created record with auto-generated ID",
-          "Use 'now' for timestamp fields",
-          "All required fields must be included"
-        ]
-      },
-      "db.edit": {
-        syntax: `db.edit "table_name" {
-  field_name = "id"
-  field_value = $input.id
-  data = {
-    field_to_update1: $input.new_value1,
-    field_to_update2: "new_literal_value",
-    updated_at: "now"
-  }
-} as $updated_record`,
-        description: "Update existing record in database",
-        parameters: [
-          "field_name: Field to match on (usually 'id')",
-          "field_value: Value to match",
-          "data: Object with fields to update"
-        ],
-        notes: [
-          "Only include fields you want to change in data object",
-          "Other fields remain untouched",
-          "Ensure field_name and field_value identify correct record"
-        ]
-      },
-      "db.del": {
-        syntax: `db.del "table_name" {
-  field_name = "id"
-  field_value = $input.id
-}`,
-        description: "Delete record from database",
-        parameters: [
-          "field_name: Field to match on (usually 'id')",
-          "field_value: Value to match"
-        ],
-        notes: [
-          "This is a permanent deletion",
-          "Ensure field_name and field_value are correct",
-          "No 'as' variable typically needed"
-        ]
-      },
-      "foreach": {
-        syntax: `foreach ($array_variable) {
-  each as $item {
-    // Process each $item
-    debug.log { value = $item.field_name }
-  }
-}`,
-        description: "Iterate over an array",
-        parameters: [
-          "$array_variable: Variable containing array to iterate",
-          "$item: Alias for each element during iteration"
-        ],
-        notes: [
-          "Ensure the variable is actually an array",
-          "For db.query results, use $query_result.rows",
-          "Creates new variable scope for $item"
-        ]
-      },
-      "conditional": {
-        syntax: `conditional {
-  if (\`$variable == "value"\`) {
-    // Execute if condition is true
-  }
-  else {
-    // Execute if condition is false
-  }
-}`,
-        description: "Execute code blocks based on condition",
-        parameters: [
-          "if (\`expression\`): Condition in backticks",
-          "else: Optional block for false condition"
-        ],
-        notes: [
-          "Expression must be wrapped in backticks",
-          "No direct 'else if' support",
-          "Use nested conditionals for complex logic"
-        ]
-      },
-      "api.request": {
-        syntax: `api.request {
-  url = "https://api.example.com/endpoint"
-  method = "POST"
-  params = {
-    key1: "value1",
-    key2: $variable_value
-  }
-  headers = [
-    "Content-Type: application/json",
-    "Authorization: Bearer TOKEN"
-  ]
-} as $api_response`,
-        description: "Make external HTTP request",
-        parameters: [
-          "url: Target API endpoint",
-          "method: GET, POST, PUT, DELETE, etc.",
-          "params: Query params (GET) or body (POST/PUT)",
-          "headers: Array of 'Header-Name: Header-Value' strings"
-        ],
-        notes: [
-          "params structure depends on method",
-          "headers must be array of strings",
-          "Response structure depends on external API"
-        ]
-      },
-      "var.update": {
-        syntax: `var.update $existing_variable {
-  value = $new_value_or_expression
-}`,
-        description: "Update existing variable value",
-        parameters: [
-          "$existing_variable: Variable previously declared with var",
-          "value: New value or expression"
-        ],
-        notes: [
-          "Variable must be declared first with 'var'",
-          "Use $ prefix for variable name",
-          "Can use filters: $var|add:1"
-        ]
-      },
-      "var": {
-        syntax: `var variable_name {
-  value = initial_value
-}`,
-        description: "Declare a new variable",
-        parameters: [
-          "value: Initial value for the variable",
-          "Can be literal, expression, or other variable"
-        ],
-        notes: [
-          "Use var.update to change value later",
-          "Access with $variable_name",
-          "Cannot redeclare same variable name"
-        ]
-      },
-      "precondition": {
-        syntax: `precondition \`$input.field != ""\` {
-  error: "Field is required",
-  error_type: "inputerror"
-}`,
-        description: "Validate condition - error if condition is TRUE",
-        parameters: [
-          "Expression in backticks (condition that triggers error)",
-          "REAL SYNTAX: Use COLONS for error assignments",
-          "Common pattern: != \"\" to check for non-empty fields"
-        ],
-        notes: [
-          "CRITICAL: Error occurs when expression is TRUE",
-          "REAL PATTERN: Use != not == for validation logic",
-          "OBJECTS USE COLONS: error: \"message\" not error = \"message\"",
-          "Pattern from live code examination"
-        ]
-      },
-      "dynamic.pagination": {
-        syntax: `// If variables in paging don't work, use intermediate variables:
-var current_page { value = $input.page }
-var items_per_page { value = $input.per_page }
-
-db.query "table_name" {
-  search = \`$db.table_name.field == "value"\`
-  return_list = {
-    paging: { page: $current_page, per_page: $items_per_page }
-  }
-} as $result`,
-        description: "Dynamic pagination when variables fail in paging block",
-        parameters: [
-          "Create intermediate variables if direct $input.field fails",
-          "Use int page { description } and int per_page { description } in input",
-          "Test direct variable usage first, fallback to this pattern"
-        ],
-        notes: [
-          "Variables SHOULD work in paging: { page: $input.page, per_page: 25 }",
-          "If they don't, this is likely a Xano parsing bug",
-          "Use intermediate vars as workaround",
-          "Always test simple case first"
-        ]
-      },
-      "return": {
-        syntax: `return {
-  value = {
-    result_field: $calculated_value,
-    success: true
-  }
-}`,
-        description: "Return value from custom function (NOT response block)",
-        parameters: [
-          "Only used inside function blocks",
-          "NOT used in query blocks (use response instead)",
-          "value: Object or simple value to return"
-        ],
-        notes: [
-          "Functions use 'return', APIs use 'response'",
-          "Place at end of function stack block",
-          "Cannot use both return and response in same block"
-        ]
-      }
-    };
-    
-    return templates[functionName] || { 
-      syntax: "Template not available", 
-      description: "Unknown function", 
-      parameters: [], 
-      notes: [] 
-    };
-  }
-
-  private getBlockTemplate(blockName: string) {
-    const templates = {
-      "query": {
-        syntax: `query "endpoint_name" verb=POST {
-  description = "Brief description of what this API does"
-  
-  // Define inputs, stack logic, and response here
-}`,
-        description: "API endpoint definition block",
-        usage: [
-          "Use for creating REST API endpoints",
-          "verb can be GET, POST, PUT, DELETE, PATCH",
-          "Always include description",
-          "Tags are managed separately, not in script"
-        ],
-        example: `query "create_user" verb=POST {
-  description = "Create a new user account"
-}`
-      },
-      "function": {
-        syntax: `function "FunctionName" {
-  description = "Function description"
-  
-  stack {
-    // Function logic (input block optional)
-    return {
-      value = result_object
-    }
-  }
-}`,
-        description: "Reusable custom function - called internally",
-        usage: [
-          "Name must be quoted (e.g., \"CalculateTotal\")",
-          "Called internally from APIs, tasks, other functions",
-          "Use 'return' statement, NOT response block",
-          "Input block is OPTIONAL - only add if function needs parameters",
-          "Cannot be called via HTTP directly"
-        ],
-        example: `function "CalculateOrderTotal" {
-  description = "Calculates order total with tax"
-  
-  input {
-    array items { description = "Order items array" }
-    decimal tax_rate ?= 0.05 { description = "Tax rate (default 5%)" }
-  }
-  
-  stack {
-    var subtotal { value = 0 }
-    foreach ($input.items) {
-      each as $item {
-        var item_total { value = $item.price|mul:$item.quantity }
-        var.update $subtotal { value = $subtotal|add:$item_total }
-      }
-    }
-    var tax_amount { value = $subtotal|mul:$input.tax_rate }
-    var final_total { value = $subtotal|add:$tax_amount }
-    
-    return {
-      value = {
-        subtotal: $subtotal,
-        tax: $tax_amount,
-        total: $final_total
-      }
-    }
-  }
-}`
-      },
-      "task": {
-        syntax: `task "TaskName" {
-  description = "Task description"
-  
-  stack {
-    // Background task logic
-    // No input/response blocks needed
-  }
-
-  schedule {
-    events = [
-      {
-        starts_on: "2025-01-01 02:00:00+0000",
-        freq: 86400
-      }
-    ]
-  }
-}`,
-        description: "Background scheduled task",
-        usage: [
-          "Name must be quoted",
-          "No input/response blocks like APIs",
-          "Use schedule.events array with objects",
-          "freq in seconds (86400 = 1 day)"
-        ],
-        example: `task "NightlyDataCleanup" {
-  description = "Cleanup old log entries nightly"
-  
-  stack {
-    var cutoff_date { value = now()|add_secs_to_timestamp:(-604800) }
-    
-    db.bulk.delete "activity_logs" {
-      search = \`$db.activity_logs.created_at < $cutoff_date\`
-    } as $delete_result
-    
-    debug.log { value = "Cleanup completed" }
-  }
-
-  schedule {
-    events = [
-      {
-        starts_on: "2025-01-01 02:00:00+0000",
-        freq: 86400
-      }
-    ]
-  }
-}`
-      },
-      "input": {
-        syntax: `input {
-  text field_name { description = "Field description" }
-  int number_field { description = "Number field" }  
-  text optional_field? { description = "Optional field" }
-  // WARNING: Test description syntax in your Xano
-  // May be: description: "..." (with colon)
-}`,
-        description: "Define API input parameters",
-        usage: [
-          "Place immediately after query/function declaration",
-          "Use ? for optional fields",
-          "Field types: text, int, decimal, boolean, email, object, file",
-          "SYNTAX UNCERTAIN: description = vs description:"
-        ],
-        example: `input {
-  text name { description = "User name" }
-  email email_address { description = "User email" }
-  int age? { description = "User age (optional)" }
-}`
-      },
-      "stack": {
-        syntax: `stack {
-  // Validation (preconditions)
-  precondition \`$input.field == null\` {
-    error = "Field is required"
-    error_type = "inputerror"
-  }
-  
-  // Variables
-  var my_variable { value = "initial_value" }
-  
-  // Database operations
-  db.query "table_name" {
-    search = \`$db.table.field == $input.value\`
-    return_list = {}
-  } as $result
-  
-  // Logic processing
-}`,
-        description: "Main logic execution block",
-        usage: [
-          "Contains all processing logic",
-          "Start with preconditions for validation",
-          "Declare variables before using them",
-          "Database operations go here"
-        ],
-        example: `stack {
-  precondition \`$input.name != ""\` {
-    error: "Name is required",
-    error_type: "inputerror"
-  }
-  
-  db.add "users" {
-    data = { name: $input.name, created_at: "now" }
-  } as $new_user
-}`
-      },
-      "response": {
-        syntax: `response {
-  value = {
-    success: true,
-    data: $result,
-    message: "Operation completed"
-  }
-}`,
-        description: "Define API response structure",
-        usage: [
-          "Final block in query/function",
-          "Must include 'value' field",
-          "Can return objects, arrays, or simple values"
-        ],
-        example: `response {
-  value = {
-    success: true,
-    user: $new_user,
-    total_users: $count_result
-  }
-}`
-      }
-    };
-    
-    return templates[blockName] || { 
-      syntax: "Template not available", 
-      description: "Unknown block", 
-      usage: [], 
-      example: "" 
-    };
-  }
-
-  private validateSingleLine(line: string, context?: string) {
-    const issues: string[] = [];
-    const suggestions: string[] = [];
-    const trimmed = line.trim();
-    
-    // CRITICAL: Conservative validation - only mark things as VALID if we're sure they work
-    
-    // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith('//')) {
-      return { valid: true, issues: [], suggestions: [] };
-    }
-    
-    // Block headers (always valid)
-    if (trimmed.match(/^(query|function|task|input|stack|response)\s*\{?\s*$/)) {
-      return { valid: true, issues: [], suggestions: [] };
-    }
-    
-    // Closing braces (always valid)
-    if (trimmed === '}') {
-      return { valid: true, issues: [], suggestions: [] };
-    }
-    
-    // Variable declarations (basic validation)
-    if (trimmed.startsWith('var ')) {
-      if (!trimmed.includes('{ value =')) {
-        issues.push("Variable syntax: var name { value = ... }");
-        suggestions.push("Example: var my_var { value = \"initial\" }");
-      }
-      return { valid: issues.length === 0, issues, suggestions };
-    }
-    
-    // CRITICAL PRECONDITION VALIDATION - Fixed for real Xano behavior
-    if (trimmed.includes('precondition')) {
-      // Check if this is a complete precondition block or just the opening line
-      const isOpeningLine = trimmed.startsWith('precondition') && trimmed.includes('{');
-      const isErrorLine = trimmed.includes('error =') && !trimmed.includes('precondition');
-      const isClosingBrace = trimmed === '}' && context && context.includes('precondition');
-      
-      if (isOpeningLine) {
-        // Validate the precondition expression line
-        if (!trimmed.includes('`')) {
-          issues.push("Precondition expressions MUST be wrapped in backticks");
-          suggestions.push('Example: precondition `$input.field == null` {');
-        }
-        
-        // Check for problematic patterns
-        if (trimmed.includes('!= ""')) {
-          issues.push('WARNING: Empty string comparisons (!= "") may not work reliably in Xano');
-          suggestions.push('Use == null for required field validation instead');
-        }
-        
-        if (trimmed.includes('len(') || trimmed.includes('length(')) {
-          issues.push('Use |strlen filter instead of len() function');
-          suggestions.push('Example: `($input.field|strlen) == 0`');
-        }
-        
-        // Opening line should have backticks and opening brace
-        if (!trimmed.includes('{')) {
-          issues.push("Precondition line should end with opening brace {");
-        }
-      } else if (isErrorLine) {
-        // Error assignment lines should be valid
-        if (!trimmed.includes('"') && trimmed.includes('error =')) {
-          issues.push('Error message should be in quotes');
-          suggestions.push('Example: error = "Field is required"');
-        }
-      } else if (isClosingBrace) {
-        // Closing braces are always valid
-        return { valid: true, issues: [], suggestions: [] };
-      }
-      
-      return { valid: issues.length === 0, issues, suggestions };
-    }
-    
-    // Error assignment lines - REAL SYNTAX with colons
-    if (trimmed.startsWith('error:') && trimmed.includes('"')) {
-      return { valid: true, issues: [], suggestions: [] };
-    }
-    
-    // Error type assignment lines - REAL SYNTAX with colons
-    if (trimmed.startsWith('error_type:') && trimmed.includes('"')) {
-      return { valid: true, issues: [], suggestions: [] };
-    }
-    
-    // WRONG syntax - equals assignment in objects
-    if ((trimmed.startsWith('error =') || trimmed.startsWith('error_type =')) && trimmed.includes('"')) {
-      issues.push("WRONG SYNTAX: Use colons in objects, not equals");
-      suggestions.push("Change 'error = \"message\"' to 'error: \"message\"'");
-      suggestions.push("Objects use colons: { key: value } not { key = value }");
-      return { valid: false, issues, suggestions };
-    }
-    
-    // Simple object property assignments (key: value)
-    if (trimmed.match(/^\s*\w+:\s*[$"\w]/) && !trimmed.includes('=')) {
-      return { valid: true, issues: [], suggestions: [] };
-    }
-    
-    // Database operations
-    if (trimmed.includes('db.')) {
-      if (!trimmed.includes('"') && (trimmed.includes('db.query') || trimmed.includes('db.get') || trimmed.includes('db.add') || trimmed.includes('db.edit') || trimmed.includes('db.del'))) {
-        issues.push("Table name should be in quotes");
-        suggestions.push('Example: db.query "table_name" {');
-      }
-      
-      if (trimmed.includes('search =') && !trimmed.includes('`')) {
-        issues.push("Search expressions must be wrapped in backticks");
-        suggestions.push('Example: search = `$db.table.field == "value"`');
-      }
-      
-      return { valid: issues.length === 0, issues, suggestions };
-    }
-    
-    // API vs Function/Task reliability guidance
-    if (trimmed.includes('response {') || (context && context.includes('response') && trimmed.includes('$'))) {
-      if (context && context.includes('query')) {
-        suggestions.push("✅ APIs work reliably - this should generate correctly");
-        suggestions.push("Use xano_get_api_with_logic to verify syntax if needed");
-      } else if (context && (context.includes('function') || context.includes('task'))) {
-        suggestions.push("⚠️ Functions/Tasks may have variable quoting issues");
-        suggestions.push("Structure works but variables may become \"strings\" instead of $variables");
-        suggestions.push("Always verify with get_function_details or get_task_details after creation");
-      }
-    }
-    
-    // Dynamic pagination warning
-    if (trimmed.includes('paging:') && trimmed.includes('$input.')) {
-      suggestions.push("PAGINATION NOTE: If variables fail in paging block, use intermediate vars as workaround");
-      suggestions.push("Example: var page_num { value = $input.page } then use $page_num");
-    }
-    
-    // For anything else, be conservative - mark as potentially invalid
-    if (trimmed.includes('=') || trimmed.includes(':') || trimmed.includes('{')) {
-      // Complex syntax - cannot reliably validate without full Xano parser
-      suggestions.push("Complex syntax detected - test in Xano to verify");
-      suggestions.push("Use templates from xano_get_function_template for proven patterns");
-    }
-    
-    return {
-      valid: issues.length === 0,
-      issues,
-      suggestions
-    };
   }
 }
 
