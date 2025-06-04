@@ -456,7 +456,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: `🏢 Xano Instances - ${result.length} instance(s) found\n==================================================\n\n` + JSON.stringify({ instances: result }, null, 2)
+              text: `🏢 Xano Instances - ${result.length} instance(s) found\n\${"=".repeat(50)}\n\n` + JSON.stringify({ instances: result }, null, 2)
             }]
           };
         } catch (error) {
@@ -603,14 +603,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `❌ Error: ${result.error}` }]
+              content: [{ type: "text", text: `❌ Tool Failed - ${result.error}\n\${"=".repeat(50)}\n${result.error}` }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: "🗂️ Workspace Details:\n" + JSON.stringify(result, null, 2)
+              text: `🗂️ Workspace Details - "${result.name}" | ID: ${result.id} | Branch: ${result.branch}\n\${"=".repeat(50)}\n` + JSON.stringify(result, null, 2)
             }]
           };
         } catch (error) {
@@ -725,14 +725,14 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
           if (result.error) {
             return {
-              content: [{ type: "text", text: `❌ Error: ${result.error}` }]
+              content: [{ type: "text", text: `❌ Tool Failed - ${result.error}\n\${"=".repeat(50)}\n${result.error}` }]
             };
           }
 
           return {
             content: [{
               type: "text",
-              text: "📋 Table Details:\n" + JSON.stringify(result, null, 2)
+              text: `📋 Table Details - "${result.name}" | ID: ${result.id} | Auth: ${result.auth}\n\${"=".repeat(50)}\n` + JSON.stringify(result, null, 2)
             }]
           };
         } catch (error) {
@@ -885,7 +885,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           return {
             content: [{
               type: "text",
-              text: "📊 Table Created Successfully:\n" + JSON.stringify(result, null, 2)
+              text: `📊 Table Created - ID: ${result.id} | Workspace: ${result.workspace_id}\n${"=".repeat(50)}\n` + JSON.stringify(result, null, 2)
             }]
           };
         } catch (error) {
@@ -954,11 +954,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
 
           return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(result || { success: true, message: "✏️ TABLE UPDATED: " + "Table updated successfully" })
-            }]
-          };
+          content: [{
+            type: "text",
+            text: `✏️ Table Updated - ID: ${result.table_id} | Fields modified\n\${"=".repeat(50)}\n` + JSON.stringify(result, null, 2)
+          }]
+        };
         } catch (error) {
           console.error(`Error updating table: ${error.message}`);
           return {
@@ -1740,7 +1740,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const total = result.total || items.length;
               const perPage = result.perPage || 50;
               const totalPages = Math.ceil(total / perPage);
-              return `🎯 API Groups - ${items.length} group(s) | Page ${page}/${totalPages}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `🎯 API Groups - ${items.length} group(s) | Page ${page}/${totalPages}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })()
             }]
           };
@@ -1798,11 +1798,11 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
           }
 
           return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(result || { success: true, message: "Record deleted successfully" })
-            }]
-          };
+          content: [{
+            type: "text",
+            text: `🗑️ Record Deleted - ID: ${result.record_id} from Table ${result.table_id}\n\${"=".repeat(50)}\n` + JSON.stringify(result, null, 2)
+          }]
+        };
         } catch (error) {
           console.error(`Error deleting table record: ${error.message}`);
           return {
@@ -2187,7 +2187,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
-                content: [{ type: "text", text: "🔐 User Authentication Info:\n" + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `🔐 User Authentication Info\n${"=".repeat(50)}\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2228,7 +2228,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
-                content: [{ type: "text", text: `📁 API Group - "${result.name || 'Unknown'}" | ${result.tag?.length || 0} tags | Swagger: ${result.swagger || false}\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `📁 API Group - "${result.name || 'Unknown'}" | ${result.tag?.length || 0} tags | Swagger: ${result.swagger || false}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2334,7 +2334,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const total = result.total || items.length;
               const perPage = result.perPage || 50;
               const totalPages = Math.ceil(total / perPage);
-              return `🔌 APIs in Group - ${items.length} API(s) | Page ${page}/${totalPages}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `🔌 APIs in Group - ${items.length} API(s) | Page ${page}/${totalPages}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })() }]
               };
             } catch (error) {
@@ -2415,7 +2415,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const total = result.total || items.length;
               const perPage = result.perPage || 50;
               const totalPages = Math.ceil(total / perPage);
-              return `📁 Files - ${items.length} file(s) | Page ${page}/${totalPages}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `📁 Files - ${items.length} file(s) | Page ${page}/${totalPages}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })() }]
               };
             } catch (error) {
@@ -2453,7 +2453,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               return {
                 content: [{ type: "text", text: (() => {
               const liveBranch = result.find((b: any) => b.live)?.name || 'main';
-              return `🌿 Workspace Branches - ${result.length} branch(es) | Live: ${liveBranch}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `🌿 Workspace Branches - ${result.length} branch(es) | Live: ${liveBranch}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })() }]
               };
             } catch (error) {
@@ -2499,7 +2499,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const items = result.items || result;
               const total = result.total || items.length;
               const totalPages = Math.ceil(total / per_page);
-              return `📊 Request History - ${items.length} request(s) | Page ${page}/${totalPages}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `📊 Request History - ${items.length} request(s) | Page ${page}/${totalPages}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })() }]
               };
             } catch (error) {
@@ -2558,7 +2558,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
-                content: [{ type: "text", text: `🔌 API Details - "${result.name || 'Unknown'}" | ${result.verb || 'GET'} ${result.path || '/'} | ${result.input?.length || 0} inputs\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `🔌 API Details - "${result.name || 'Unknown'}" | ${result.verb || 'GET'} ${result.path || '/'} | ${result.input?.length || 0} inputs\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2608,7 +2608,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const total = result.total || items.length;
               const perPage = result.perPage || 50;
               const totalPages = Math.ceil(total / perPage);
-              return `⚡ Functions - ${items.length} function(s) | Page ${page}/${totalPages}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `⚡ Functions - ${items.length} function(s) | Page ${page}/${totalPages}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })() }]
               };
             } catch (error) {
@@ -2656,7 +2656,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "PUT", data, this.env);
 
               return {
-                content: [{ type: "text", text: `⚡ Function Details - "${result.name || 'Unknown'}" | ID: ${result.id || function_id} | Draft: ${include_draft ? 'Yes' : 'No'}\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `⚡ Function Details - "${result.name || 'Unknown'}" | ID: ${result.id || function_id} | Draft: ${include_draft ? 'Yes' : 'No'}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2744,7 +2744,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const total = result.total || items.length;
               const perPage = result.perPage || 50;
               const totalPages = Math.ceil(total / perPage);
-              return `⏰ Tasks - ${items.length} task(s) | Page ${page}/${totalPages}\n==================================================\n\n` + JSON.stringify(result, null, 2);
+              return `⏰ Tasks - ${items.length} task(s) | Page ${page}/${totalPages}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2);
             })() }]
               };
             } catch (error) {
@@ -2795,7 +2795,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
-                content: [{ type: "text", text: `⏰ Task Details - "${result.name || 'Unknown'}" | ID: ${result.id || task_id} | Active: ${result.active || false} | Draft: ${include_draft ? 'Yes' : 'No'}\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `⏰ Task Details - "${result.name || 'Unknown'}" | ID: ${result.id || task_id} | Active: ${result.active || false} | Draft: ${include_draft ? 'Yes' : 'No'}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2831,7 +2831,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
-                content: [{ type: "text", text: `📝 API Logic - "${result.name || 'Unknown'}" | ${result.verb || 'GET'} | ${result.input?.length || 0} inputs | Draft: ${include_draft ? 'Yes' : 'No'}\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `📝 API Logic - "${result.name || 'Unknown'}" | ${result.verb || 'GET'} | ${result.input?.length || 0} inputs | Draft: ${include_draft ? 'Yes' : 'No'}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2881,7 +2881,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "PUT", data, this.env);
 
               return {
-                content: [{ type: "text", text: `📋 APIs with Logic - ${result.items?.length || 0} API(s) | Group: ${api_group_id}\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `📋 APIs with Logic - ${result.items?.length || 0} API(s) | Group: ${api_group_id}\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
@@ -2961,7 +2961,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
-                content: [{ type: "text", text: `📤 Workspace Exported - ID: ${workspace_id} | Data included: ${include_data || false}\n==================================================\n\n` + JSON.stringify({
+                content: [{ type: "text", text: `📤 Workspace Exported - ID: ${workspace_id} | Data included: ${include_data || false}\n\${"=".repeat(50)}\n\n` + JSON.stringify({
                   success: true,
                   message: "Workspace export completed successfully",
                   data: result,
@@ -3008,7 +3008,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "POST", data, this.env);
 
               return {
-                content: [{ type: "text", text: `📤 Schema Exported - Workspace: ${workspace_id} | Branch: ${branch || 'live'}\n==================================================\n\n` + JSON.stringify({
+                content: [{ type: "text", text: `📤 Schema Exported - Workspace: ${workspace_id} | Branch: ${branch || 'live'}\n\${"=".repeat(50)}\n\n` + JSON.stringify({
                   success: true,
                   message: "Schema export completed successfully",
                   data: result,
@@ -3060,7 +3060,7 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
               const result = await makeApiRequest(url, token, "GET", null, this.env);
 
               return {
-                content: [{ type: "text", text: `📜 Table Script - "${result.name || 'Unknown'}" | ID: ${result.id || table_id} | ${result.script?.length || 0} characters\n==================================================\n\n` + JSON.stringify(result, null, 2) }]
+                content: [{ type: "text", text: `📜 Table Script - "${result.name || 'Unknown'}" | ID: ${result.id || table_id} | ${result.script?.length || 0} characters\n\${"=".repeat(50)}\n\n` + JSON.stringify(result, null, 2) }]
               };
             } catch (error) {
               return {
