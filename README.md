@@ -1,193 +1,204 @@
-# Snappy MCP Server
+# MCP OAuth Template
 
-A Model Context Protocol (MCP) server that enables Claude and other AI assistants to interact with Xano backend services through 60+ specialized tools.
+A production-ready template for building Model Context Protocol (MCP) servers with OAuth authentication on Cloudflare Workers.
 
-## 🚨 Recent Security Fix (2025-06-08)
+## 🎯 What is this?
 
-Fixed a critical security vulnerability where users were getting each other's API keys. All users are now properly isolated with their own credentials.
+This template provides a complete foundation for building MCP tools with:
+- 🔐 **OAuth Authentication** - Secure user login with session persistence
+- 📚 **Educational Examples** - 6 well-documented tool patterns to learn from
+- 🚀 **Production Ready** - Includes security fixes and error handling
+- ☁️ **Cloudflare Workers** - Serverless deployment with Durable Objects
+- 🔄 **Auto Token Refresh** - Handles expired tokens transparently
 
-## Overview
+## 🏃 Quick Start
 
-Snappy MCP runs on Cloudflare Workers and provides:
-- 🔐 **OAuth Authentication** - Secure login with Xano credentials
-- 🛠️ **60+ Xano Tools** - Complete database, API, and file management
-- 🔄 **Automatic Token Refresh** - Handles expired tokens transparently
-- 💾 **Session Persistence** - Maintains auth across Worker restarts
-- 🏗️ **Minimal Architecture** - Only 6 core files for easy maintenance
+### 1. Use This Template
 
-## Quick Start
+Click the "Use this template" button above to create your own repository.
 
-### Prerequisites
-- Cloudflare account with Workers enabled
-- Xano instance with authentication endpoint
-- Node.js and npm installed
-- Wrangler CLI: `npm install -g wrangler`
-
-### Installation
+### 2. Clone and Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/roboulos/cloudflare-mcp-server.git
-cd cloudflare-mcp-server
-
-# Install dependencies
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
 npm install
+```
 
-# Configure your environment
+### 3. Configure
+
+```bash
+# Copy example config
 cp wrangler.example.jsonc wrangler.jsonc
+
+# Generate encryption key
+openssl rand -base64 32
+
 # Edit wrangler.jsonc with your values
+```
+
+### 4. Deploy
+
+```bash
+# Create KV namespaces
+npx wrangler kv namespace create OAUTH_KV
+npx wrangler kv namespace create SESSION_CACHE
 
 # Deploy to Cloudflare
 npx wrangler deploy
 ```
 
-### Configuration
+### 5. Connect Claude
 
-Update `wrangler.jsonc` with your settings:
-```jsonc
-{
-  "vars": {
-    "XANO_BASE_URL": "https://your-instance.xano.io",
-    "COOKIE_ENCRYPTION_KEY": "generate-a-secure-key-here"
-  }
-}
-```
-
-Generate a secure cookie encryption key:
-```bash
-openssl rand -base64 32
-```
-
-### Connecting Claude Desktop
-
-Add to your Claude Desktop config:
+Add to Claude Desktop config:
 ```json
 {
   "mcpServers": {
-    "snappy-mcp": {
+    "your-server": {
       "command": "npx",
-      "args": [
-        "mcp-remote",
-        "connect",
-        "wss://your-worker.workers.dev/mcp"
-      ]
+      "args": ["mcp-remote", "connect", "wss://your-server.workers.dev/mcp"]
     }
   }
 }
 ```
 
-## Authentication
+## 📖 What's Included
 
-1. Start Claude Desktop and select the Snappy MCP server
-2. You'll be redirected to a login page
-3. Enter your Xano credentials
-4. The system will store your API key securely
+### Example Tools
 
-**Important**: You must have an API key configured in your Xano account settings.
+The template includes 6 example tools that demonstrate key patterns:
 
-## Available Tools
+1. **Simple Authentication** - Basic tool with auth check
+2. **API Calls** - Making external API requests
+3. **Input Validation** - Complex parameter validation
+4. **Batch Operations** - Processing multiple items
+5. **Debug Tools** - Tools without auth requirements
+6. **Content Types** - Different response formats
 
-### Instance & Workspace Management
-- `xano_list_instances` - List all Xano instances
-- `xano_get_instance_details` - Get instance information
-- `xano_list_databases` - List workspaces/databases
-- `xano_get_workspace_details` - Get workspace details
+### File Structure
 
-### Table Operations
-- `xano_list_tables` - List all tables in a workspace
-- `xano_get_table_details` - Get table information
-- `xano_create_table` - Create a new table
-- `xano_update_table` - Update table metadata
-- `xano_delete_table` - Delete a table
+```
+├── src/
+│   ├── index.ts              # Your tools go here (with examples)
+│   ├── xano-handler.ts       # OAuth flow (rarely need to edit)
+│   ├── utils.ts              # API utilities
+│   ├── refresh-profile.ts    # Token refresh logic
+│   ├── smart-error.ts        # Error handling
+│   └── workers-oauth-utils.ts # OAuth helpers
+├── TEMPLATE_GUIDE.md         # Comprehensive documentation
+├── wrangler.example.jsonc    # Example configuration
+└── package.json
+```
 
-### Schema Management
-- `xano_get_table_schema` - Get table schema
-- `xano_add_field_to_schema` - Add a field to table
-- `xano_rename_schema_field` - Rename a field
-- `xano_delete_field` - Delete a field
+## 🛠️ Building Your Tools
 
-### Record Operations
-- `xano_browse_table_content` - Browse table records
-- `xano_get_table_record` - Get specific record
-- `xano_create_table_record` - Create new record
-- `xano_update_table_record` - Update existing record
-- `xano_delete_table_record` - Delete a record
-- `xano_bulk_create_records` - Create multiple records
-- `xano_bulk_update_records` - Update multiple records
+### Basic Pattern
 
-### API Management
-- `xano_list_api_groups` - List API groups
-- `xano_create_api_group` - Create new API group
-- `xano_list_apis_in_group` - List APIs in a group
-- `xano_create_api` - Create new API endpoint
-- `xano_get_api_details` - Get API configuration
-- `xano_update_api` - Update API settings
+```typescript
+this.server.tool(
+  "your_tool_name",
+  {
+    // Define parameters with Zod
+    param1: z.string().describe("Description"),
+    param2: z.number().optional()
+  },
+  async ({ param1, param2 }) => {
+    // Check authentication
+    if (!this.props?.authenticated) {
+      return SmartError.authenticationFailed().toMCPResponse();
+    }
 
-### File Management
-- `xano_list_files` - List uploaded files
-- `xano_upload_file` - Upload a file
-- `xano_delete_file` - Delete a file
+    try {
+      // Your logic here
+      const result = await doSomething(param1, param2);
+      
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Success!\n${JSON.stringify(result, null, 2)}`
+        }]
+      };
+    } catch (error) {
+      return new SmartError(
+        "Operation failed",
+        error.message
+      ).toMCPResponse();
+    }
+  }
+);
+```
 
-## Architecture
+### Key Concepts
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical information.
+1. **Authentication**: Check `this.props?.authenticated`
+2. **Parameters**: Use Zod schemas with `.describe()`
+3. **Errors**: Use `SmartError` for consistency
+4. **API Calls**: Use `this.makeAuthenticatedRequest()`
+5. **Responses**: Return text content with clear formatting
 
-### Core Files
-- `src/index.ts` - Main MCP server implementation
-- `src/xano-handler.ts` - OAuth authentication handler
-- `src/utils.ts` - API utilities and token refresh
-- `src/refresh-profile.ts` - User profile refresh logic
-- `src/smart-error.ts` - Error handling
-- `src/workers-oauth-utils.ts` - OAuth utility functions
+## 📚 Documentation
 
-## Troubleshooting
+See [TEMPLATE_GUIDE.md](TEMPLATE_GUIDE.md) for:
+- Detailed explanations of each example
+- Best practices and patterns
+- Troubleshooting guide
+- Customization options
+- Architecture overview
 
-### Common Issues
+## 🔧 Customization
 
-**"Invalid token" errors**
-- Ensure you have an API key set in your Xano account
-- Try logging out and back in
-- Check that you're using the correct Xano instance
+### Change Authentication Backend
 
-**Authentication failures**
-- Clear cookies and try again
-- Verify your Xano credentials
-- Check Cloudflare Worker logs: `npx wrangler tail`
+Edit the auth endpoint in `xano-handler.ts`:
+```typescript
+const authUrl = `${baseUrl}/your/auth/endpoint`;
+```
 
-**Connection issues**
-- Ensure your Worker is deployed: `npx wrangler deploy`
-- Check Claude Desktop logs: `~/Library/Logs/Claude/`
-- Verify MCP configuration in Claude Desktop
+### Add Environment Variables
 
-### Debug Tools
+1. Add to `wrangler.jsonc`:
+```jsonc
+"vars": {
+  "YOUR_API_KEY": "value"
+}
+```
 
-The server includes debug tools (when authenticated):
-- `debug_auth` - Check authentication status
-- `debug_expire_oauth_tokens` - Test token expiry
-- `debug_refresh_profile` - Force token refresh
+2. Update TypeScript interface in `index.ts`:
+```typescript
+export interface Env {
+  YOUR_API_KEY: string;
+}
+```
 
-## Security
+### Remove Examples
 
-- User credentials are isolated per-user
-- API keys are stored encrypted in KV storage
-- OAuth tokens have 24-hour TTL
-- No cross-user data access
+Once you understand the patterns, replace the example tools in `index.ts` with your own.
 
-## Contributing
+## 🚀 Features
 
+- **Secure**: User credentials are properly isolated
+- **Persistent**: Sessions survive Worker hibernation
+- **Scalable**: Built on Cloudflare's global network
+- **Type-Safe**: Full TypeScript support
+- **Well-Documented**: Every pattern explained
+
+## 🤝 Contributing
+
+This is a template repository. To contribute improvements:
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Make your changes
+3. Submit a pull request
 
-## License
+## 📄 License
 
-MIT License - see LICENSE file for details
+MIT License - see LICENSE file
 
-## Links
+## 🔗 Resources
 
-- **Repository**: https://github.com/roboulos/cloudflare-mcp-server
-- **Issues**: https://github.com/roboulos/cloudflare-mcp-server/issues
-- **MCP Documentation**: https://modelcontextprotocol.io/
-- **Xano Documentation**: https://docs.xano.com/
+- [MCP Documentation](https://modelcontextprotocol.io/)
+- [Cloudflare Workers](https://developers.cloudflare.com/workers/)
+- [Template Guide](TEMPLATE_GUIDE.md)
+
+---
+
+Built with security and education in mind. Ready for production use.
