@@ -5943,10 +5943,11 @@ interface Message<T = any> {
 }
 
 // Queue consumer handler for usage logging
-export async function queue(batch: MessageBatch, env: Env): Promise<void> {
-  const { default: queueConsumer } = await import('./queue-consumer');
-  await queueConsumer.queue(batch, env);
-}
+// Commented out as we're not using queue logging yet
+// export async function queue(batch: MessageBatch, env: Env): Promise<void> {
+//   const { default: queueConsumer } = await import('./queue-consumer');
+//   await queueConsumer.queue(batch, env);
+// }
 
 // Environment type
 export interface Env {
