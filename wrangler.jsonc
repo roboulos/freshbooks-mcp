@@ -6,7 +6,7 @@
   "account_id": "7eb97d8aafdc135db8eb1c18613dc170",
   "migrations": [
     {
-      "new_sqlite_classes": ["MyMCP"],
+      "new_classes": ["MyMCP"],
       "tag": "v1"
     }
   ],
@@ -18,7 +18,18 @@
       }
     ]
   },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "c43c2dc2174244c8bb1d4e5bb9cf6fa4"
+    },
+    {
+      "binding": "SESSION_CACHE",
+      "id": "a5bbbec35f76415ca305c1e0b0f0c36f"
+    }
+  ],
   "vars": {
-    "XANO_BASE_URL": "https://xnwv-v1z6-dvnr.n7c.xano.io"
+    "XANO_BASE_URL": "https://xnwv-v1z6-dvnr.n7c.xano.io",
+    "COOKIE_ENCRYPTION_KEY": "secure-oauth-cookie-encryption-key-for-xano-mcp"
   }
 }

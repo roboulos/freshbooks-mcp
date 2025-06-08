@@ -1,178 +1,193 @@
-# Xano MCP Server - Original Minimal Implementation
+# Snappy MCP Server
 
-**Historical Branch**: This is the original minimal implementation that started the journey toward the revolutionary XanoScript breakthrough.
+A Model Context Protocol (MCP) server that enables Claude and other AI assistants to interact with Xano backend services through 60+ specialized tools.
 
-## 🏛️ Historical Context
+## 🚨 Recent Security Fix (2025-06-08)
 
-This branch represents the **foundational proof-of-concept** that demonstrated MCP-Xano integration was possible. It led to the development of increasingly sophisticated implementations, culminating in the revolutionary [`xanoscript-revolution-v1.0-production-ready`](../../tree/xanoscript-revolution-v1.0-production-ready) branch.
+Fixed a critical security vulnerability where users were getting each other's API keys. All users are now properly isolated with their own credentials.
 
-## ⚠️ Current Status: Educational/Historical Use Only
+## Overview
 
-**What This Branch Provides:**
-- ✅ Basic token authentication with Xano
-- ✅ Simple MCP server implementation
-- ✅ Proof-of-concept foundation
-
-**What This Branch Lacks:**
-- ❌ Tool persistence (tools disappear on hibernation)
-- ❌ OAuth security implementation
-- ❌ Usage logging and analytics
-- ❌ Production-ready features
-- ❌ XanoScript revolutionary capabilities
-
-## 🔄 Branch Evolution Path
-
-This repository evolved through several stages:
-
-1. **`main`** (this branch): Minimal token passthrough - proof of concept
-2. **`oauth-provider`**: Added OAuth security and session persistence
-3. **`complete-usage-logging-fix`**: Added comprehensive tool set and analytics
-4. **`xanoscript-revolution-v1.0-production-ready`**: **CURRENT PRODUCTION BRANCH** with revolutionary XanoScript capabilities
-
-## 🚀 Recommended Migration
-
-**For Production Use**: Switch to the revolutionary branch:
-```bash
-git checkout xanoscript-revolution-v1.0-production-ready
-```
-
-**Revolutionary Features You'll Gain:**
-- 🎯 **56 Tools** (vs 0 functional tools in this branch)
-- 🔐 **OAuth Security** with automatic token management
-- 📊 **Usage Analytics** with comprehensive logging  
-- 🚀 **XanoScript Support** - Create complete business logic with AI
-- 🏗️ **Production Workflows** - Draft/publish safety features
-- 🗄️ **Database-as-Code** - Table creation with XanoScript
-
-## 📚 Educational Value
-
-This branch remains valuable for:
-- Understanding the evolution of the project
-- Learning basic MCP server implementation
-- Historical reference for the development journey
-- Teaching simple authentication concepts
-
-## 🏗️ Basic Implementation Details
-
-### Simple Token Flow
-1. Extract `auth_token` from URL parameters
-2. Validate against Xano's `/auth/me` endpoint  
-3. Create basic authentication context
-4. No persistence or session management
-
-### Limitations
-- **No Tool State**: Each hibernation resets everything
-- **No OAuth Flow**: Manual token management required
-- **No Production Features**: Missing enterprise capabilities
-- **No Analytics**: No usage tracking or monitoring
-
----
-
-**✨ This minimal implementation sparked the creation of the world's first AI-powered complete application development platform through XanoScript.**
-
-## Features
-
-- **Minimalist MCP Server**: Clean, simple implementation with no dependencies beyond the core SDK
-- **Basic Xano Authentication**: Passes and validates access tokens against Xano's API
-- **Multiple Connection Methods**: Supports both SSE (browser) and HTTP connections
-- **Type Safety**: Full TypeScript support for better developer experience
-- **Easy to Understand**: Simple codebase that's perfect for learning how MCP works
-
-## Prerequisites
-
-- A Cloudflare account with Workers access
-- A Xano instance with authentication API endpoint
-- npm and wrangler CLI installed
+Snappy MCP runs on Cloudflare Workers and provides:
+- 🔐 **OAuth Authentication** - Secure login with Xano credentials
+- 🛠️ **60+ Xano Tools** - Complete database, API, and file management
+- 🔄 **Automatic Token Refresh** - Handles expired tokens transparently
+- 💾 **Session Persistence** - Maintains auth across Worker restarts
+- 🏗️ **Minimal Architecture** - Only 6 core files for easy maintenance
 
 ## Quick Start
 
-1. Clone this repository:
-   ```
-   git clone https://github.com/roboulos/cloudflare-mcp-server.git
-   cd cloudflare-mcp-server
-   ```
+### Prerequisites
+- Cloudflare account with Workers enabled
+- Xano instance with authentication endpoint
+- Node.js and npm installed
+- Wrangler CLI: `npm install -g wrangler`
 
-2. Install dependencies:
-   ```
-   npm install
-   ```
+### Installation
 
-3. Update your Xano URL in `wrangler.toml`:
-   ```toml
-   [vars]
-   XANO_BASE_URL = "https://YOUR-INSTANCE.n7c.xano.io"
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/roboulos/cloudflare-mcp-server.git
+cd cloudflare-mcp-server
 
-4. Deploy to Cloudflare:
-   ```
-   npx wrangler deploy
-   ```
+# Install dependencies
+npm install
 
-5. Connect using Claude or the Cloudflare AI Playground:
-   ```
-   https://your-worker.your-account.workers.dev/sse?auth_token=YOUR_XANO_TOKEN
-   ```
+# Configure your environment
+cp wrangler.example.jsonc wrangler.jsonc
+# Edit wrangler.jsonc with your values
 
-## How It Works
+# Deploy to Cloudflare
+npx wrangler deploy
+```
 
-### Authentication Flow
+### Configuration
 
-1. Client connects with a Xano token via URL parameter (`?auth_token=...`) or Authorization header
-2. Server validates the token with Xano's `/auth/me` API endpoint
-3. If valid, creates a simple authentication context for the MCP agent
-4. Tools check for authentication before executing
-5. No session state is maintained - token is validated on each request
+Update `wrangler.jsonc` with your settings:
+```jsonc
+{
+  "vars": {
+    "XANO_BASE_URL": "https://your-instance.xano.io",
+    "COOKIE_ENCRYPTION_KEY": "generate-a-secure-key-here"
+  }
+}
+```
 
-### Key Files
+Generate a secure cookie encryption key:
+```bash
+openssl rand -base64 32
+```
 
-- `src/index.ts`: The main MCP server implementation with token extraction and validation
-- `wrangler.toml`: Cloudflare Worker configuration
+### Connecting Claude Desktop
 
-## Technical Implementation
+Add to your Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "snappy-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "connect",
+        "wss://your-worker.workers.dev/mcp"
+      ]
+    }
+  }
+}
+```
 
-The implementation uses a single file approach with three main components:
+## Authentication
 
-1. **Token Extraction**
-   - Extracts tokens from URL parameters or Authorization headers
-   - No token storage or management
+1. Start Claude Desktop and select the Snappy MCP server
+2. You'll be redirected to a login page
+3. Enter your Xano credentials
+4. The system will store your API key securely
 
-2. **Xano Validation**
-   - Simple validation against Xano's `/auth/me` endpoint
-   - Creates a basic authentication context object
+**Important**: You must have an API key configured in your Xano account settings.
 
-3. **MCP Agent**
-   - Sets up a basic MCP agent with authentication checks
-   - Minimal implementation with no persistence
+## Available Tools
 
-## Adding Your Own Tools
+### Instance & Workspace Management
+- `xano_list_instances` - List all Xano instances
+- `xano_get_instance_details` - Get instance information
+- `xano_list_databases` - List workspaces/databases
+- `xano_get_workspace_details` - Get workspace details
 
-To add new tools:
+### Table Operations
+- `xano_list_tables` - List all tables in a workspace
+- `xano_get_table_details` - Get table information
+- `xano_create_table` - Create a new table
+- `xano_update_table` - Update table metadata
+- `xano_delete_table` - Delete a table
 
-1. Add tool registrations in the `init()` method of the MCP agent class
-2. Use `this.props?.user?.authenticated` to check authentication
-3. Make direct API calls to Xano as needed
+### Schema Management
+- `xano_get_table_schema` - Get table schema
+- `xano_add_field_to_schema` - Add a field to table
+- `xano_rename_schema_field` - Rename a field
+- `xano_delete_field` - Delete a field
+
+### Record Operations
+- `xano_browse_table_content` - Browse table records
+- `xano_get_table_record` - Get specific record
+- `xano_create_table_record` - Create new record
+- `xano_update_table_record` - Update existing record
+- `xano_delete_table_record` - Delete a record
+- `xano_bulk_create_records` - Create multiple records
+- `xano_bulk_update_records` - Update multiple records
+
+### API Management
+- `xano_list_api_groups` - List API groups
+- `xano_create_api_group` - Create new API group
+- `xano_list_apis_in_group` - List APIs in a group
+- `xano_create_api` - Create new API endpoint
+- `xano_get_api_details` - Get API configuration
+- `xano_update_api` - Update API settings
+
+### File Management
+- `xano_list_files` - List uploaded files
+- `xano_upload_file` - Upload a file
+- `xano_delete_file` - Delete a file
+
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical information.
+
+### Core Files
+- `src/index.ts` - Main MCP server implementation
+- `src/xano-handler.ts` - OAuth authentication handler
+- `src/utils.ts` - API utilities and token refresh
+- `src/refresh-profile.ts` - User profile refresh logic
+- `src/smart-error.ts` - Error handling
+- `src/workers-oauth-utils.ts` - OAuth utility functions
 
 ## Troubleshooting
 
-- **Tools disappear after inactivity**: This is expected - this implementation has no persistence
-- **Authentication failures**: Verify your Xano token is valid
-- **"Authentication required" messages**: Make sure your token is being passed correctly
+### Common Issues
 
-## Moving to More Advanced Implementations
+**"Invalid token" errors**
+- Ensure you have an API key set in your Xano account
+- Try logging out and back in
+- Check that you're using the correct Xano instance
 
-When you outgrow this implementation:
+**Authentication failures**
+- Clear cookies and try again
+- Verify your Xano credentials
+- Check Cloudflare Worker logs: `npx wrangler tail`
 
-1. **Need Xano tools?** Use the `xano-tools` branch for basic Xano API operations
-2. **Need persistence?** Use the `oauth-provider` branch for full OAuth flow with session persistence
+**Connection issues**
+- Ensure your Worker is deployed: `npx wrangler deploy`
+- Check Claude Desktop logs: `~/Library/Logs/Claude/`
+- Verify MCP configuration in Claude Desktop
 
-The **oauth-provider** branch solves the hibernation issue where tools disappear, by implementing a proper OAuth flow that maintains authentication state.
+### Debug Tools
 
-## Resources
+The server includes debug tools (when authenticated):
+- `debug_auth` - Check authentication status
+- `debug_expire_oauth_tokens` - Test token expiry
+- `debug_refresh_profile` - Force token refresh
 
-- [Model Context Protocol (MCP) Documentation](https://github.com/anthropics/model-context-protocol)
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-- [Xano Documentation](https://docs.xano.com/)
+## Security
+
+- User credentials are isolated per-user
+- API keys are stored encrypted in KV storage
+- OAuth tokens have 24-hour TTL
+- No cross-user data access
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
 
-MIT
+MIT License - see LICENSE file for details
+
+## Links
+
+- **Repository**: https://github.com/roboulos/cloudflare-mcp-server
+- **Issues**: https://github.com/roboulos/cloudflare-mcp-server/issues
+- **MCP Documentation**: https://modelcontextprotocol.io/
+- **Xano Documentation**: https://docs.xano.com/
