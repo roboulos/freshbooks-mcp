@@ -4,10 +4,14 @@ import { fetchXanoUserInfo } from "./utils";
  * Refreshes the user profile by calling the auth/me endpoint and updating the KV storage
  * This function can be called during request handling to ensure the API key is fresh
  */
-export async function refreshUserProfile(env: any, userId?: string) {
+export async function refreshUserProfile(env: any, userId: string) {
   try {
-    // TODO: This function should require userId parameter to properly scope KV queries
-    // Currently it searches across ALL users which is a security risk
+    // FIXED: Now requires userId parameter to properly scope KV queries
+    if (!userId) {
+      console.error("refreshUserProfile called without userId - this is a security risk!");
+      return { success: false, error: "userId is required for profile refresh" };
+    }
+    
     // Get the KV binding and base URL
     const OAUTH_KV = env.OAUTH_KV;
     const baseUrl = env.XANO_BASE_URL || "https://xnwv-v1z6-dvnr.n7c.xano.io";
@@ -23,29 +27,19 @@ export async function refreshUserProfile(env: any, userId?: string) {
     let storageKey = null;  // Track which key we found the token in
     
     try {
-      // Look for xano_auth_token entries
-      const authEntries = await OAUTH_KV.list({ prefix: 'xano_auth_token:' });
+      // Look for the specific user's auth token
+      storageKey = `xano_auth_token:${userId}`;
+      const authDataStr = await OAUTH_KV.get(storageKey);
       
-      if (authEntries.keys && authEntries.keys.length > 0) {
-        console.log(`Found ${authEntries.keys.length} explicit auth token entries`);
-        // Use the first auth token entry
-        storageKey = authEntries.keys[0].name;
-        const authDataStr = await OAUTH_KV.get(storageKey);
+      if (authDataStr) {
+        authData = JSON.parse(authDataStr);
+        authToken = authData.authToken;
         
-        if (authDataStr) {
-          authData = JSON.parse(authDataStr);
-          const userId = authData.userId;
-          authToken = authData.authToken;
-          
-          if (authToken) {
-            console.log(`Found stored auth token for user ${userId} in key ${storageKey}`);
-          } else {
-            console.error("Auth token entry found but token is missing");
-            return { success: false, error: "Auth token not found in stored data" };
-          }
+        if (authToken) {
+          console.log(`Found stored auth token for user ${userId} in key ${storageKey}`);
         } else {
-          console.error(`Auth data not found for key: ${storageKey}`);
-          return { success: false, error: "Auth data not found" };
+          console.error("Auth token entry found but token is missing");
+          return { success: false, error: "Auth token not found in stored data" };
         }
       } else {
         // Fall back to looking for token: entries

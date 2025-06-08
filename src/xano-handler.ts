@@ -189,12 +189,20 @@ app.get("/callback", async (c) => {
         const name = userData.name || userData.email || 'Xano User';
         const email = userData.email;
         // Extract API key from auth/me response
-        const apiKey = userData.api_key || token;
+        const apiKey = userData.api_key || null;  // Don't fall back to token!
 
         console.log("User data from /auth/me:", {
             hasApiKey: !!userData.api_key,
             apiKeyPrefix: userData.api_key ? userData.api_key.substring(0, 20) + '...' : null,
-            userIdFromResponse: userData.id
+            userIdFromResponse: userData.id,
+            email: userData.email,
+            name: userData.name
+        });
+        
+        console.log("Props being set in completeAuthorization:", {
+            userId: userId,
+            email: email,
+            apiKeyPrefix: apiKey ? apiKey.substring(0, 20) + '...' : 'NO_API_KEY'
         });
 
         // Store the token explicitly in KV storage for our refresh mechanism

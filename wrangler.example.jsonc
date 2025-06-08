@@ -1,0 +1,39 @@
+{
+  "name": "xano-mcp-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  // Replace with your Cloudflare account ID
+  "account_id": "YOUR_CLOUDFLARE_ACCOUNT_ID",
+  "migrations": [
+    {
+      "new_classes": ["MyMCP"],
+      "tag": "v1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "MyMCP",
+        "name": "MCP_OBJECT"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      // Create a KV namespace and put its ID here
+      "id": "YOUR_OAUTH_KV_NAMESPACE_ID"
+    },
+    {
+      "binding": "SESSION_CACHE",
+      // Create another KV namespace for sessions
+      "id": "YOUR_SESSION_CACHE_NAMESPACE_ID"
+    }
+  ],
+  "vars": {
+    // These should be set as environment variables in production
+    // XANO_BASE_URL: "https://your-instance.xano.io"
+    // COOKIE_ENCRYPTION_KEY: "your-secure-random-key"
+  }
+}

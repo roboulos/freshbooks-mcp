@@ -131,7 +131,7 @@ export function extractToken(request: Request): string | null {
 }
 
 // Utility function to make API requests with automatic refresh on 401
-export async function makeApiRequest(url: string, token: string, method = "GET", data?: any, env?: any) {
+export async function makeApiRequest(url: string, token: string, method = "GET", data?: any, env?: any, userId?: string) {
   try {
     const headers: Record<string, string> = {
       "Authorization": `Bearer ${token}`,
@@ -188,13 +188,13 @@ export async function makeApiRequest(url: string, token: string, method = "GET",
     // For JSON responses
     if (!response.ok) {
       // Handle 401 errors with automatic refresh
-      if (response.status === 401 && env) {
+      if (response.status === 401 && env && userId) {
         console.log("Got 401 Unauthorized - attempting automatic token refresh...");
         
         try {
           // Import refreshUserProfile dynamically to avoid circular imports
           const { refreshUserProfile } = await import('./refresh-profile');
-          const refreshResult = await refreshUserProfile(env);
+          const refreshResult = await refreshUserProfile(env, userId);
           
           if (refreshResult.success && refreshResult.profile?.apiKey) {
             console.log("Token refresh successful - retrying original request");

@@ -106,7 +106,23 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
   async getFreshApiKey(): Promise<string | null> {
     // Simple approach - just use the API key from props
     // When OAuth token expires, user will need to re-authenticate
+    console.log("getFreshApiKey called with props:", {
+      userId: this.props?.userId,
+      email: this.props?.email,
+      hasApiKey: !!this.props?.apiKey,
+      apiKeyPrefix: this.props?.apiKey ? this.props.apiKey.substring(0, 20) + "..." : null
+    });
     return this.props?.apiKey || null;
+  }
+
+  // Helper method to make API requests with automatic userId passing
+  async makeAuthenticatedRequest(url: string, method = "GET", data?: any): Promise<any> {
+    const token = await this.getFreshApiKey();
+    if (!token) {
+      throw new Error("No API key available");
+    }
+    // Pass userId from props for proper user-scoped refresh
+    return makeApiRequest(url, token, method, data, this.env, this.props?.userId);
   }
 
   async init() {
