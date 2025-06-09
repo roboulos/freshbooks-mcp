@@ -1,5 +1,5 @@
 {
-  "name": "xano-mcp-server",
+  "name": "freshbooks-mcp-server",
   "main": "src/index.ts",
   "compatibility_date": "2025-03-10",
   "compatibility_flags": ["nodejs_compat"],
@@ -30,6 +30,7 @@
   ],
   "vars": {
     "XANO_BASE_URL": "https://xnwv-v1z6-dvnr.n7c.xano.io",
-    "COOKIE_ENCRYPTION_KEY": "secure-oauth-cookie-encryption-key-for-xano-mcp"
+    "COOKIE_ENCRYPTION_KEY": "secure-oauth-cookie-encryption-key-for-xano-mcp",
+    "FRESHBOOKS_ACCOUNT_ID": "YOUR_FRESHBOOKS_ACCOUNT_ID"
   }
 }

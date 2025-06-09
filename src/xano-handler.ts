@@ -242,6 +242,7 @@ app.get("/callback", async (c) => {
                 name,
                 email,
                 apiKey: apiKey, // Use the API key from auth/me response
+                freshbooksKey: userData.freshbooks_key || null, // FreshBooks key from user's Xano account
                 userId: userId, // Explicitly set userId for hello tool
                 authenticated: true,
             } as Props,

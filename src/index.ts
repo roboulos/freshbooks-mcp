@@ -10,6 +10,7 @@ interface XanoAuthProps {
   name: string;
   email: string;
   apiKey: string | null;
+  freshbooksKey: string | null;  // FreshBooks API key from user's Xano account
   userId: string;
   authenticated: boolean;
 }
@@ -22,6 +23,7 @@ export interface Env {
   XANO_BASE_URL: string;
   COOKIE_ENCRYPTION_KEY: string;
   OAUTH_TOKEN_TTL?: string;
+  FRESHBOOKS_ACCOUNT_ID: string;  // Your FreshBooks account ID
 }
 
 // Clean up expired auth tokens
@@ -45,7 +47,7 @@ async function deleteAllAuthTokens(env: Env): Promise<number> {
 
 export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
   server = new McpServer({
-    name: "Example MCP Server",
+    name: "FreshBooks MCP Server",
     version: "1.0.0",
   });
 
@@ -61,6 +63,17 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
     return this.props?.apiKey || null;
   }
 
+  async getFreshBooksKey(): Promise<string | null> {
+    // Returns FreshBooks API key from user's Xano account
+    console.log("getFreshBooksKey called with props:", {
+      userId: this.props?.userId,
+      email: this.props?.email,
+      hasFreshBooksKey: !!this.props?.freshbooksKey,
+      freshbooksKeyPrefix: this.props?.freshbooksKey ? this.props.freshbooksKey.substring(0, 20) + "..." : null
+    });
+    return this.props?.freshbooksKey || null;
+  }
+
   // Helper method to make authenticated API requests
   async makeAuthenticatedRequest(url: string, method = "GET", data?: any): Promise<any> {
     const token = await this.getFreshApiKey();
@@ -73,182 +86,254 @@ export class MyMCP extends McpAgent<Env, unknown, XanoAuthProps> {
 
   async init() {
     
-    // ===== EXAMPLE 1: Simple Tool with Authentication Check =====
+    // ===== Tool 1: List Invoices =====
     this.server.tool(
-      "example_hello",
+      "freshbooks_list_invoices",
       {
-        // Zod schema defines the parameters
-        name: z.string().describe("Name to greet"),
-        excited: z.boolean().optional().describe("Whether to add excitement")
+        status: z.enum(["draft", "sent", "viewed", "paid", "auto-paid", "retry", "failed", "partial"]).optional().describe("Filter by invoice status"),
+        page: z.number().optional().default(1).describe("Page number for pagination")
       },
-      async ({ name, excited }) => {
-        // Always check authentication first
-        if (!this.props?.authenticated) {
-          return {
-            content: [{ type: "text", text: "🔒 Authentication required. Please log in first." }]
-          };
-        }
-
-        const greeting = excited ? `Hello, ${name}! 🎉` : `Hello, ${name}.`;
-        
-        return {
-          content: [{
-            type: "text",
-            text: `${greeting}\n\nYou are authenticated as: ${this.props.email}`
-          }]
-        };
-      }
-    );
-
-    // ===== EXAMPLE 2: Tool Making External API Calls =====
-    this.server.tool(
-      "example_fetch_data",
-      {
-        endpoint: z.string().describe("API endpoint to fetch from"),
-        method: z.enum(["GET", "POST", "PUT", "DELETE"]).default("GET"),
-        data: z.any().optional().describe("Data to send with POST/PUT requests")
-      },
-      async ({ endpoint, method, data }) => {
-        // Check authentication
+      async ({ status, page }) => {
         if (!this.props?.authenticated) {
           return SmartError.authenticationFailed().toMCPResponse();
         }
 
-        try {
-          // Use the helper method for authenticated requests
-          const result = await this.makeAuthenticatedRequest(
-            endpoint,
-            method,
-            data
-          );
+        const freshbooksKey = this.props.freshbooksKey;
+        if (!freshbooksKey) {
+          return new SmartError(
+            "FreshBooks Not Connected",
+            "Connect your FreshBooks account at mcp.snappy.ai",
+            { tip: "Visit mcp.snappy.ai → Integrations → Connect FreshBooks" }
+          ).toMCPResponse();
+        }
 
+        try {
+          const url = new URL(`https://api.freshbooks.com/accounting/account/${this.env.FRESHBOOKS_ACCOUNT_ID}/invoices/invoices`);
+          url.searchParams.set("page", page.toString());
+          url.searchParams.set("per_page", "50");
+          if (status) url.searchParams.set("search[status]", status);
+
+          const response = await fetch(url.toString(), {
+            headers: {
+              "Authorization": `Bearer ${freshbooksKey}`,
+              "Api-Version": "alpha",
+              "Content-Type": "application/json"
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`FreshBooks API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
           return {
             content: [{
               type: "text",
-              text: `✅ API Response:\n${JSON.stringify(result, null, 2)}`
+              text: `📄 Found ${data.invoices.length} invoices\n\n${data.invoices.map(inv => 
+                `• Invoice #${inv.invoice_number} - ${inv.organization} - $${inv.amount.amount} (${inv.status})`
+              ).join('\n')}`
             }]
           };
         } catch (error) {
-          // Use SmartError for consistent error handling
           return new SmartError(
-            "API request failed",
-            error.message,
-            {
-              tip: "Check that the endpoint is correct and you have permission to access it",
-              endpoint,
-              method
-            }
+            "Failed to fetch invoices",
+            error.message
           ).toMCPResponse();
         }
       }
     );
 
-    // ===== EXAMPLE 3: Tool with Complex Input Validation =====
+    // ===== Tool 2: Send Saturday Invoices =====
     this.server.tool(
-      "example_create_record",
+      "freshbooks_send_saturday_invoices",
       {
-        table_name: z.string().min(1).describe("Name of the table"),
-        fields: z.record(z.any()).describe("Field values as key-value pairs"),
-        validate_required: z.array(z.string()).optional().describe("List of required field names")
+        dry_run: z.boolean().default(true).describe("Preview without sending (default: true)")
       },
-      async ({ table_name, fields, validate_required }) => {
+      async ({ dry_run }) => {
         if (!this.props?.authenticated) {
           return SmartError.authenticationFailed().toMCPResponse();
         }
 
-        // Example validation logic
-        if (validate_required) {
-          const missingFields = validate_required.filter(field => !fields[field]);
-          if (missingFields.length > 0) {
-            return new SmartError(
-              "Missing required fields",
-              `The following fields are required: ${missingFields.join(", ")}`,
-              {
-                tip: "Add the missing fields to your request",
-                missingFields,
-                providedFields: Object.keys(fields)
+        const freshbooksKey = this.props.freshbooksKey;
+        if (!freshbooksKey) {
+          return new SmartError(
+            "FreshBooks Not Connected",
+            "Connect your FreshBooks account at mcp.snappy.ai"
+          ).toMCPResponse();
+        }
+
+        try {
+          // Get draft invoices
+          const response = await fetch(
+            `https://api.freshbooks.com/accounting/account/${this.env.FRESHBOOKS_ACCOUNT_ID}/invoices/invoices?search[status]=draft`,
+            {
+              headers: {
+                "Authorization": `Bearer ${freshbooksKey}`,
+                "Api-Version": "alpha"
               }
+            }
+          );
+
+          const data = await response.json();
+          const draftInvoices = data.invoices || [];
+
+          if (draftInvoices.length === 0) {
+            return {
+              content: [{
+                type: "text",
+                text: "✅ No draft invoices to send"
+              }]
+            };
+          }
+
+          if (dry_run) {
+            return {
+              content: [{
+                type: "text",
+                text: `📋 ${draftInvoices.length} invoices ready to send:\n\n${draftInvoices.map(inv => 
+                  `• ${inv.organization} - $${inv.amount.amount}`
+                ).join('\n')}\n\nRun with dry_run=false to send`
+              }]
+            };
+          }
+
+          // Send each invoice
+          const results = [];
+          for (const invoice of draftInvoices) {
+            const sendResponse = await fetch(
+              `https://api.freshbooks.com/accounting/account/${this.env.FRESHBOOKS_ACCOUNT_ID}/invoices/invoices/${invoice.id}/send`,
+              {
+                method: "PUT",
+                headers: {
+                  "Authorization": `Bearer ${freshbooksKey}`,
+                  "Api-Version": "alpha",
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  invoice: {
+                    email_recipients: [invoice.contacts[0]?.email].filter(Boolean),
+                    invoice_customized_email: {
+                      subject: "Invoice from Robert Boulos",
+                      body: "Please find your invoice attached. Thank you for your business!"
+                    }
+                  }
+                })
+              }
+            );
+
+            results.push({
+              client: invoice.organization,
+              success: sendResponse.ok,
+              amount: invoice.amount.amount
+            });
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: `✉️ Saturday Invoices Sent!\n\n${results.map(r => 
+                `${r.success ? '✅' : '❌'} ${r.client} - $${r.amount}`
+              ).join('\n')}`
+            }]
+          };
+        } catch (error) {
+          return new SmartError(
+            "Failed to send invoices",
+            error.message
+          ).toMCPResponse();
+        }
+      }
+    );
+
+    // ===== Tool 3: Log Time Entry =====
+    this.server.tool(
+      "freshbooks_log_time",
+      {
+        client_name: z.string().describe("Client name"),
+        hours: z.number().describe("Hours worked"),
+        description: z.string().describe("Work description"),
+        date: z.string().optional().describe("Date (YYYY-MM-DD), defaults to today")
+      },
+      async ({ client_name, hours, description, date }) => {
+        if (!this.props?.authenticated) {
+          return SmartError.authenticationFailed().toMCPResponse();
+        }
+
+        const freshbooksKey = this.props.freshbooksKey;
+        if (!freshbooksKey) {
+          return new SmartError(
+            "FreshBooks Not Connected",
+            "Connect your FreshBooks account at mcp.snappy.ai"
+          ).toMCPResponse();
+        }
+
+        try {
+          // First, find the client
+          const clientsResponse = await fetch(
+            `https://api.freshbooks.com/accounting/account/${this.env.FRESHBOOKS_ACCOUNT_ID}/users/clients?search[organization]=${encodeURIComponent(client_name)}`,
+            {
+              headers: {
+                "Authorization": `Bearer ${freshbooksKey}`,
+                "Api-Version": "alpha"
+              }
+            }
+          );
+
+          const clientsData = await clientsResponse.json();
+          const client = clientsData.clients?.[0];
+          
+          if (!client) {
+            return new SmartError(
+              "Client not found",
+              `Could not find client "${client_name}"`,
+              { tip: "Check the client name and try again" }
             ).toMCPResponse();
           }
-        }
 
-        // Simulate creating a record
-        const mockResponse = {
-          id: Math.floor(Math.random() * 10000),
-          table: table_name,
-          fields: fields,
-          created_at: new Date().toISOString()
-        };
-
-        return {
-          content: [{
-            type: "text",
-            text: `📝 Record Created Successfully\n${JSON.stringify(mockResponse, null, 2)}`
-          }]
-        };
-      }
-    );
-
-    // ===== EXAMPLE 4: Tool with Progress Updates (for long operations) =====
-    this.server.tool(
-      "example_batch_operation",
-      {
-        items: z.array(z.string()).describe("List of items to process"),
-        delay_ms: z.number().default(100).describe("Delay between items (ms)")
-      },
-      async ({ items, delay_ms }) => {
-        if (!this.props?.authenticated) {
-          return SmartError.authenticationFailed().toMCPResponse();
-        }
-
-        const results = [];
-        const errors = [];
-
-        // Process items one by one
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          
-          try {
-            // Simulate processing with delay
-            await new Promise(resolve => setTimeout(resolve, delay_ms));
-            
-            // Simulate random success/failure
-            if (Math.random() > 0.8) {
-              throw new Error(`Failed to process ${item}`);
+          // Create time entry
+          const timeEntry = {
+            time_entry: {
+              client_id: client.id,
+              duration: hours * 3600, // Convert hours to seconds
+              note: description,
+              started_at: `${date || new Date().toISOString().split('T')[0]}T09:00:00Z`
             }
-            
-            results.push({
-              item,
-              status: "success",
-              processedAt: new Date().toISOString()
-            });
-          } catch (error) {
-            errors.push({
-              item,
-              status: "error",
-              error: error.message
-            });
+          };
+
+          const response = await fetch(
+            `https://api.freshbooks.com/accounting/account/${this.env.FRESHBOOKS_ACCOUNT_ID}/time_entries`,
+            {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${freshbooksKey}`,
+                "Api-Version": "alpha",
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(timeEntry)
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Failed to create time entry: ${response.status}`);
           }
+
+          return {
+            content: [{
+              type: "text",
+              text: `⏱️ Time Entry Created\n\nClient: ${client_name}\nHours: ${hours}\nDescription: ${description}\nDate: ${date || 'Today'}`
+            }]
+          };
+        } catch (error) {
+          return new SmartError(
+            "Failed to log time",
+            error.message
+          ).toMCPResponse();
         }
-
-        // Return detailed results
-        return {
-          content: [{
-            type: "text",
-            text: `📊 Batch Operation Complete
-            
-Total Items: ${items.length}
-Successful: ${results.length}
-Failed: ${errors.length}
-
-Results:
-${JSON.stringify({ results, errors }, null, 2)}`
-          }]
-        };
       }
     );
 
-    // ===== EXAMPLE 5: Debug/Admin Tools =====
+    // ===== Tool 4: Debug/Connection Status =====
     this.server.tool(
       "debug_auth_status",
       {},
@@ -258,7 +343,8 @@ ${JSON.stringify({ results, errors }, null, 2)}`
           authenticated: this.props?.authenticated || false,
           userId: this.props?.userId || "none",
           email: this.props?.email || "none",
-          hasApiKey: !!this.props?.apiKey,
+          hasXanoApiKey: !!this.props?.apiKey,
+          hasFreshBooksKey: !!this.props?.freshbooksKey,
           timestamp: new Date().toISOString()
         };
 
@@ -271,110 +357,58 @@ ${JSON.stringify({ results, errors }, null, 2)}`
       }
     );
 
-    // ===== EXAMPLE 6: Tool that Returns Different Content Types =====
+    // ===== Tool 5: Get Revenue Report =====
     this.server.tool(
-      "example_multi_content",
+      "freshbooks_revenue_report",
       {
-        content_type: z.enum(["text", "json", "markdown", "error"]).describe("Type of content to return")
+        start_date: z.string().optional().describe("Start date (YYYY-MM-DD)"),
+        end_date: z.string().optional().describe("End date (YYYY-MM-DD)")
       },
-      async ({ content_type }) => {
+      async ({ start_date, end_date }) => {
         if (!this.props?.authenticated) {
           return SmartError.authenticationFailed().toMCPResponse();
         }
 
-        switch (content_type) {
-          case "text":
-            return {
-              content: [{
-                type: "text",
-                text: "This is plain text content."
-              }]
-            };
-            
-          case "json":
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  message: "This is JSON content",
-                  timestamp: new Date().toISOString(),
-                  user: this.props.email
-                }, null, 2)
-              }]
-            };
-            
-          case "markdown":
-            return {
-              content: [{
-                type: "text",
-                text: `# Markdown Content
-                
-This is **bold** and this is *italic*.
-
-## Lists
-- Item 1
-- Item 2
-- Item 3
-
-## Code
-\`\`\`javascript
-console.log("Hello from MCP!");
-\`\`\`
-`
-              }]
-            };
-            
-          case "error":
-            throw new Error("This is an intentional error for demonstration");
-            
-          default:
-            return {
-              content: [{
-                type: "text",
-                text: "Unknown content type"
-              }]
-            };
-        }
-      }
-    );
-
-    // ===== ADMIN TOOL: Clear Auth Tokens (with confirmation) =====
-    this.server.tool(
-      "admin_clear_all_tokens",
-      {
-        confirm: z.boolean().describe("Set to true to confirm token deletion")
-      },
-      async ({ confirm }) => {
-        // Admin tools might have additional checks
-        if (!this.props?.authenticated || this.props.email !== "admin@example.com") {
+        const freshbooksKey = this.props.freshbooksKey;
+        if (!freshbooksKey) {
           return new SmartError(
-            "Unauthorized",
-            "This tool requires admin privileges",
-            { tip: "Contact your administrator for access" }
+            "FreshBooks Not Connected",
+            "Connect your FreshBooks account at mcp.snappy.ai"
           ).toMCPResponse();
         }
 
-        if (!confirm) {
-          return {
-            content: [{
-              type: "text",
-              text: "⚠️ This will delete all authentication tokens. Set confirm=true to proceed."
-            }]
-          };
-        }
-
         try {
-          const deletedCount = await deleteAllAuthTokens(this.env);
+          // Default to current month if no dates provided
+          const now = new Date();
+          const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+          const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+          
+          const url = new URL(`https://api.freshbooks.com/accounting/account/${this.env.FRESHBOOKS_ACCOUNT_ID}/reports/accounting`);
+          url.searchParams.set("start_date", start_date || defaultStart);
+          url.searchParams.set("end_date", end_date || defaultEnd);
+
+          const response = await fetch(url.toString(), {
+            headers: {
+              "Authorization": `Bearer ${freshbooksKey}`,
+              "Api-Version": "alpha"
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch report: ${response.status}`);
+          }
+
+          const data = await response.json();
           
           return {
             content: [{
               type: "text",
-              text: `🗑️ Deleted ${deletedCount} authentication tokens.\n\nAll users will need to re-authenticate.`
+              text: `📊 Revenue Report (${start_date || defaultStart} to ${end_date || defaultEnd})\n\nTotal Revenue: $${data.total_revenue || 0}\nTotal Invoiced: $${data.total_invoiced || 0}\nOutstanding: $${data.total_outstanding || 0}`
             }]
           };
         } catch (error) {
           return new SmartError(
-            "Failed to clear tokens",
+            "Failed to generate report",
             error.message
           ).toMCPResponse();
         }
